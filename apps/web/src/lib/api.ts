@@ -103,6 +103,16 @@ export const eventAPI = {
 
     joinTeam: (inviteCode: string) =>
         api.post("/events/teams/join", { invite_code: inviteCode }),
+
+    // Event-Problem linking
+    problems: (eventId: string) =>
+        api.get(`/events/${eventId}/problems`),
+
+    linkProblem: (eventId: string, problemId: string) =>
+        api.post(`/events/${eventId}/problems/${problemId}`),
+
+    unlinkProblem: (eventId: string, problemId: string) =>
+        api.delete(`/events/${eventId}/problems/${problemId}`),
 };
 
 // ── Problem APIs ─────────────────────────────

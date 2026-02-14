@@ -7,6 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.orm import DeclarativeBase
 from app.config import settings
 
+# Build the actual database URL
+db_url = settings.DATABASE_URL
+
+# Convert standard postgresql:// to async driver
+if db_url.startswith("postgresql://"):
+    db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+
 # SQLite needs special connect_args
 connect_args = {}
 engine_kwargs = {
@@ -18,10 +27,12 @@ if settings.is_sqlite:
     connect_args = {"check_same_thread": False}
     engine_kwargs["connect_args"] = connect_args
 else:
-    engine_kwargs["pool_size"] = 20
+    engine_kwargs["pool_size"] = 5
     engine_kwargs["max_overflow"] = 10
+    engine_kwargs["pool_timeout"] = 30
+    engine_kwargs["pool_recycle"] = 1800  # Recycle connections after 30 min
 
-engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
+engine = create_async_engine(db_url, **engine_kwargs)
 
 async_session = async_sessionmaker(
     engine,
@@ -49,6 +60,6 @@ async def get_db():
 
 
 async def init_db():
-    """Create all tables (for development only, use Alembic in production)."""
+    """Create all tables (for development/initial setup)."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

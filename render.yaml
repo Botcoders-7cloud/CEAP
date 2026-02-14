@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: ceap-api
+    runtime: python
+    plan: free
+    rootDir: apps/api
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: JUDGE0_URL
+        value: https://ce.judge0.com
+      - key: PYTHON_VERSION
+        value: "3.11.7"

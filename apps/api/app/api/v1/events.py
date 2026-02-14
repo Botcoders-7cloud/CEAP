@@ -11,12 +11,14 @@ import secrets
 
 from app.database import get_db
 from app.models.tenant import User
-from app.models.event import Event, Registration, Team, TeamMember
+from app.models.event import Event, EventRound, Registration, Team, TeamMember
+from app.models.problem import Problem, EventProblem
 from app.schemas.event import (
     EventCreate, EventUpdate, EventResponse, EventListResponse,
     RegistrationCreate, RegistrationResponse,
     TeamCreate, TeamJoin, TeamResponse,
 )
+from app.schemas.submission import ProblemResponse
 from app.core.security import get_current_user, require_faculty, require_admin
 
 router = APIRouter(prefix="/events", tags=["Events"])
@@ -323,3 +325,90 @@ async def join_team(
         is_locked=team.is_locked,
         member_count=member_count + 1,
     )
+
+
+# ── Event Problems ──────────────────────────────────────────
+
+@router.get("/{event_id}/problems", response_model=list[ProblemResponse])
+async def list_event_problems(
+    event_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List problems linked to an event."""
+    result = await db.execute(
+        select(Problem)
+        .join(EventProblem, EventProblem.problem_id == Problem.id)
+        .where(EventProblem.event_id == event_id)
+        .order_by(EventProblem.order_index)
+    )
+    problems = result.scalars().all()
+    return [ProblemResponse.model_validate(p) for p in problems]
+
+
+@router.post("/{event_id}/problems/{problem_id}", status_code=201)
+async def link_problem_to_event(
+    event_id: UUID,
+    problem_id: UUID,
+    user: User = Depends(require_faculty),
+    db: AsyncSession = Depends(get_db),
+):
+    """Link a problem to an event (faculty+)."""
+    # Verify event exists
+    event = (await db.execute(
+        select(Event).where(Event.id == event_id, Event.tenant_id == user.tenant_id)
+    )).scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # Verify problem exists
+    problem = (await db.execute(select(Problem).where(Problem.id == problem_id))).scalar_one_or_none()
+    if not problem:
+        raise HTTPException(status_code=404, detail="Problem not found")
+
+    # Check if already linked
+    existing = (await db.execute(
+        select(EventProblem).where(
+            EventProblem.event_id == event_id,
+            EventProblem.problem_id == problem_id,
+        )
+    )).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=409, detail="Problem already linked to event")
+
+    # Get next order
+    max_order = (await db.execute(
+        select(func.max(EventProblem.order_index)).where(EventProblem.event_id == event_id)
+    )).scalar() or 0
+
+    ep = EventProblem(
+        event_id=event_id,
+        problem_id=problem_id,
+        order_index=max_order + 1,
+        points=100,
+    )
+    db.add(ep)
+    await db.flush()
+    return {"detail": "Problem linked", "order": ep.order_index}
+
+
+@router.delete("/{event_id}/problems/{problem_id}", status_code=204)
+async def unlink_problem_from_event(
+    event_id: UUID,
+    problem_id: UUID,
+    user: User = Depends(require_faculty),
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove a problem from an event (faculty+)."""
+    result = await db.execute(
+        select(EventProblem).where(
+            EventProblem.event_id == event_id,
+            EventProblem.problem_id == problem_id,
+        )
+    )
+    ep = result.scalar_one_or_none()
+    if not ep:
+        raise HTTPException(status_code=404, detail="Link not found")
+
+    await db.delete(ep)
+    await db.flush()

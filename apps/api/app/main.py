@@ -7,13 +7,17 @@ from contextlib import asynccontextmanager
 
 from app.config import settings
 from app.api.v1 import router as api_router
+from app.database import init_db
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown logic."""
-    # Startup
+    # Startup — create tables if they don't exist
     print(f"🚀 CEAP API starting in {settings.APP_ENV} mode")
+    print(f"📦 Database: {'SQLite' if settings.is_sqlite else 'PostgreSQL'}")
+    await init_db()
+    print("✅ Database tables ready")
     yield
     # Shutdown
     print("👋 CEAP API shutting down")
@@ -47,7 +51,8 @@ async def root():
         "name": settings.APP_NAME,
         "version": "0.1.0",
         "status": "running",
-        "docs": f"{settings.API_URL}/api/docs",
+        "env": settings.APP_ENV,
+        "docs": "/api/docs",
     }
 
 
