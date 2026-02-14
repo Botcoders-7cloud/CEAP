@@ -3,6 +3,7 @@ CEAP Database Configuration
 Async SQLAlchemy engine and session management.
 Supports both PostgreSQL (production) and SQLite (local dev).
 """
+import ssl
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from app.config import settings
@@ -27,6 +28,13 @@ if settings.is_sqlite:
     connect_args = {"check_same_thread": False}
     engine_kwargs["connect_args"] = connect_args
 else:
+    # PostgreSQL production settings
+    # Create SSL context for Supabase (requires SSL)
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+
+    engine_kwargs["connect_args"] = {"ssl": ssl_context}
     engine_kwargs["pool_size"] = 5
     engine_kwargs["max_overflow"] = 10
     engine_kwargs["pool_timeout"] = 30
@@ -60,6 +68,11 @@ async def get_db():
 
 
 async def init_db():
-    """Create all tables (for development/initial setup)."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """Create all tables. Gracefully handles connection failures."""
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        print("✅ Database tables created/verified")
+    except Exception as e:
+        print(f"⚠️  Database init warning: {e}")
+        print("   Tables may need to be created manually or the DB may be temporarily unavailable.")
