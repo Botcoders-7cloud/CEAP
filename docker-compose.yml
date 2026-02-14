@@ -1,0 +1,75 @@
+version: "3.9"
+services:
+  # ── CEAP PostgreSQL ─────────────────────────
+  db:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ceap
+      POSTGRES_USER: ceap
+      POSTGRES_PASSWORD: ceap_local_pass
+    volumes:
+      - ceap-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ceap"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Redis (for leaderboard cache) ──────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  # ── Judge0 CE ──────────────────────────────
+  judge0-server:
+    image: judge0/judge0-ce:1.13.0
+    ports:
+      - "2358:2358"
+    environment:
+      - REDIS_URL=redis://judge0-redis:6379
+      - POSTGRES_HOST=judge0-db
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0pass
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    restart: unless-stopped
+
+  judge0-workers:
+    image: judge0/judge0-ce:1.13.0
+    command: ["./scripts/workers"]
+    environment:
+      - REDIS_URL=redis://judge0-redis:6379
+      - POSTGRES_HOST=judge0-db
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0pass
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    privileged: true
+    restart: unless-stopped
+
+  judge0-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: judge0
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0pass
+    volumes:
+      - judge0-db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  judge0-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+volumes:
+  ceap-db-data:
+  judge0-db-data:

@@ -1,0 +1,18 @@
+{
+  "name": "ceap",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Campus Event & Assessment Platform - B2B SaaS",
+  "scripts": {
+    "dev:web": "cd apps/web && npm run dev",
+    "dev:api": "cd apps/api && python -m uvicorn app.main:app --reload --port 8000",
+    "build:web": "cd apps/web && npm run build",
+    "lint:web": "cd apps/web && npm run lint",
+    "test:api": "cd apps/api && pytest",
+    "db:migrate": "cd apps/api && alembic upgrade head",
+    "db:seed": "cd apps/api && python -m scripts.seed"
+  },
+  "workspaces": [
+    "apps/web"
+  ]
+}
