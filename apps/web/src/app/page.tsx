@@ -7,7 +7,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
 import Link from "next/link";
-import { ArrowRight, Code2, Trophy, Award, Users, Zap, Shield, ChevronRight, Sparkles } from "lucide-react";
+import { ArrowRight, Code2, Trophy, Award, Users, Zap, Shield, Sparkles } from "lucide-react";
 
 const FEATURES = [
   { icon: Code2, title: "Code Execution", desc: "Built-in editor with Python, C++, Java & JS. Auto-graded against test cases in real-time.", accent: "#7c3aed" },
@@ -55,9 +55,8 @@ export default function HomePage() {
           <span className="text-xl font-bold tracking-tight gradient-text">CEAP</span>
         </Link>
         <div className="flex items-center gap-3">
-          <Link href="/login" className="btn-ghost">Sign In</Link>
-          <Link href="/register" className="btn-primary py-2 px-5">
-            Get Started
+          <Link href="/login" className="btn-primary py-2 px-5">
+            Sign In
           </Link>
         </div>
       </nav>
@@ -84,11 +83,8 @@ export default function HomePage() {
         </p>
 
         <div className="flex gap-4 justify-center animate-fade-up" style={{ animationDelay: "0.3s", opacity: 0 }}>
-          <Link href="/register" className="btn-primary py-3.5 px-8 text-base flex items-center gap-2">
-            Start Free <ArrowRight size={18} />
-          </Link>
-          <Link href="/login" className="btn-secondary py-3.5 px-8 text-base flex items-center gap-2">
-            View Demo <ChevronRight size={16} />
+          <Link href="/login" className="btn-primary py-3.5 px-8 text-base flex items-center gap-2">
+            Sign In <ArrowRight size={18} />
           </Link>
         </div>
 
@@ -140,8 +136,8 @@ export default function HomePage() {
           <p className="mb-8" style={{ color: "var(--text-secondary)" }}>
             Start hosting hackathons and coding contests in minutes.
           </p>
-          <Link href="/register" className="btn-primary py-3 px-10 text-base inline-flex items-center gap-2">
-            Get Started for Free <ArrowRight size={18} />
+          <Link href="/login" className="btn-primary py-3 px-10 text-base inline-flex items-center gap-2">
+            Sign In to Get Started <ArrowRight size={18} />
           </Link>
         </div>
       </section>

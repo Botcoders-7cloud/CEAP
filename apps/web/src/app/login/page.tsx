@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useAuthStore } from "@/store/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { LogIn, Eye, EyeOff, Sparkles } from "lucide-react";
+import { LogIn, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
     const [email, setEmail] = useState("");
@@ -188,11 +188,8 @@ export default function LoginPage() {
 
                     <div className="divider my-8" />
 
-                    <p className="text-center text-sm" style={{ color: "var(--text-muted)" }}>
-                        Don&apos;t have an account?{" "}
-                        <Link href="/register" className="font-semibold transition-colors hover:underline" style={{ color: "var(--primary-light)" }}>
-                            Sign up
-                        </Link>
+                    <p className="text-center text-xs" style={{ color: "var(--text-muted)" }}>
+                        All accounts are managed by your administrator.
                     </p>
                 </div>
             </div>
