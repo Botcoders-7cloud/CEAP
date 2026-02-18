@@ -170,26 +170,28 @@ async def rotate_keys(
     return KeysResponse(join_code=tenant.join_code, faculty_key=tenant.faculty_key)
 
 
-# ── Student Whitelist ─────────────────────────────────────────────────────────
+# ── Student Bulk Import ───────────────────────────────────────────────────────
 
 @router.get("/students")
-async def list_whitelisted_students(
+async def list_students(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    """List all whitelisted student roll numbers."""
+    """List all student accounts in this tenant."""
     result = await db.execute(
-        select(StudentWhitelist)
-        .where(StudentWhitelist.tenant_id == admin.tenant_id)
-        .order_by(StudentWhitelist.roll_number)
+        select(User)
+        .where(User.tenant_id == admin.tenant_id, User.role == "student")
+        .order_by(User.full_name)
     )
     students = result.scalars().all()
     return [
         {
+            "id": str(s.id),
             "roll_number": s.roll_number,
-            "name": s.name,
+            "full_name": s.full_name,
             "email": s.email,
-            "is_registered": s.is_registered,
+            "status": s.status,
+            "department": s.department,
             "created_at": s.created_at,
         }
         for s in students
@@ -203,98 +205,129 @@ async def import_students_csv(
     admin: User = Depends(require_admin),
 ):
     """
-    Import student roll numbers from a CSV file.
-    Expected CSV columns: roll_number, name (optional), email (optional)
+    Bulk-create student accounts from a CSV file.
+    CSV columns: roll_number, name (or full_name), email, password
+    Students can login directly — no self-registration needed.
     """
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
 
     content = await file.read()
     try:
-        text = content.decode("utf-8-sig")  # handle BOM
+        text = content.decode("utf-8-sig")   # handle BOM from Excel/Numbers
     except UnicodeDecodeError:
         text = content.decode("latin-1")
 
     reader = csv.DictReader(io.StringIO(text))
 
-    # Normalize headers (case-insensitive, strip spaces)
     if reader.fieldnames is None:
         raise HTTPException(status_code=400, detail="CSV file is empty or invalid")
 
+    # Normalize headers: lowercase + underscores
     headers = {h.strip().lower().replace(" ", "_"): h for h in reader.fieldnames}
 
-    # Find roll_number column — accept common variations
-    roll_col = None
-    for key in ["roll_number", "roll_no", "rollno", "roll", "id", "student_id"]:
-        if key in headers:
-            roll_col = headers[key]
-            break
+    # Detect columns flexibly
+    def find_col(*keys):
+        for k in keys:
+            if k in headers:
+                return headers[k]
+        return None
+
+    roll_col  = find_col("roll_number", "roll_no", "rollno", "roll", "student_id", "id")
+    name_col  = find_col("name", "full_name", "student_name", "name_of_the_student")
+    email_col = find_col("email", "mail_id", "mail", "email_id")
+    pass_col  = find_col("password", "pass", "passwd", "temp_password")
+
     if not roll_col:
         raise HTTPException(
             status_code=400,
-            detail=f"Could not find roll number column. Found: {list(reader.fieldnames)}"
+            detail=f"Could not find roll number column. Columns found: {list(reader.fieldnames)}"
         )
 
-    name_col = headers.get("name") or headers.get("student_name") or headers.get("full_name")
-    email_col = headers.get("email") or headers.get("mail_id") or headers.get("mail")
+    # Get tenant for limit check
+    tenant_result = await db.execute(select(Tenant).where(Tenant.id == admin.tenant_id))
+    tenant = tenant_result.scalar_one_or_none()
 
     inserted = 0
     skipped = 0
     errors = []
 
     for i, row in enumerate(reader, start=2):
-        roll = row.get(roll_col, "").strip().upper()
+        roll = (row.get(roll_col) or "").strip().upper()
         if not roll:
             continue
 
-        name = row.get(name_col, "").strip() if name_col else None
-        email = row.get(email_col, "").strip() if email_col else None
+        name  = (row.get(name_col)  or "").strip() if name_col  else roll
+        email = (row.get(email_col) or "").strip() if email_col else None
+        pwd   = (row.get(pass_col)  or "").strip() if pass_col  else None
 
-        # Check if already exists
+        # Use roll number as email if none provided (roll@tenant)
+        if not email:
+            email = f"{roll.lower()}@{tenant.slug}.ceap"
+
+        # Use roll number as default password if none provided
+        if not pwd:
+            pwd = roll  # admin should inform students their default password = roll number
+
+        # Skip if email already exists in this tenant
         existing = await db.execute(
-            select(StudentWhitelist).where(
-                StudentWhitelist.tenant_id == admin.tenant_id,
-                StudentWhitelist.roll_number == roll
-            )
+            select(User).where(User.tenant_id == admin.tenant_id, User.email == email)
         )
         if existing.scalar_one_or_none():
             skipped += 1
             continue
 
-        entry = StudentWhitelist(
-            tenant_id=admin.tenant_id,
-            roll_number=roll,
-            name=name or None,
-            email=email or None,
+        # Also skip if roll number already registered
+        roll_existing = await db.execute(
+            select(User).where(User.tenant_id == admin.tenant_id, User.roll_number == roll)
         )
-        db.add(entry)
-        inserted += 1
+        if roll_existing.scalar_one_or_none():
+            skipped += 1
+            continue
+
+        try:
+            user = User(
+                tenant_id=admin.tenant_id,
+                email=email,
+                password_hash=hash_password(pwd),
+                full_name=name or roll,
+                role="student",
+                status="active",
+                roll_number=roll,
+            )
+            db.add(user)
+            inserted += 1
+        except Exception as e:
+            errors.append(f"Row {i} ({roll}): {str(e)}")
 
     await db.flush()
     return {
-        "message": f"Import complete",
+        "message": "Import complete — students can now login directly",
         "inserted": inserted,
-        "skipped": skipped,
+        "skipped_duplicates": skipped,
         "errors": errors,
+        "note": "Default password = roll number if no password column in CSV",
     }
 
 
-@router.delete("/students/{roll_number}")
-async def remove_student_from_whitelist(
-    roll_number: str,
+@router.delete("/students/{user_id}")
+async def remove_student(
+    user_id: str,
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    """Remove a roll number from the whitelist."""
+    """Deactivate a student account."""
     result = await db.execute(
-        select(StudentWhitelist).where(
-            StudentWhitelist.tenant_id == admin.tenant_id,
-            StudentWhitelist.roll_number == roll_number.upper()
+        select(User).where(
+            User.id == user_id,
+            User.tenant_id == admin.tenant_id,
+            User.role == "student"
         )
     )
-    entry = result.scalar_one_or_none()
-    if not entry:
-        raise HTTPException(status_code=404, detail="Roll number not found")
-    await db.delete(entry)
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Student not found")
+    user.is_active = False
+    user.status = "suspended"
     await db.flush()
-    return {"message": f"Removed {roll_number} from whitelist"}
+    return {"message": f"Student {user.roll_number} deactivated"}

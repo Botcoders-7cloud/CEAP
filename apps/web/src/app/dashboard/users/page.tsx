@@ -206,7 +206,7 @@ export default function AdminUsersPage() {
                     { key: "pending", label: `Pending (${pendingFaculty.length})` },
                     { key: "all", label: "All Users" },
                     { key: "keys", label: "Access Keys" },
-                    { key: "students", label: "Student Whitelist" },
+                    { key: "students", label: "Students" },
                 ] as const).map(tab => (
                     <button
                         key={tab.key}
@@ -339,15 +339,17 @@ export default function AdminUsersPage() {
                 </div>
             )}
 
-            {/* Student Whitelist Tab */}
+            {/* Students Tab */}
             {activeTab === "students" && (
                 <div className="space-y-4">
                     <div className="card p-5">
                         <div className="flex items-center justify-between mb-4">
                             <div>
-                                <h3 className="font-semibold">Import Student Roll Numbers</h3>
+                                <h3 className="font-semibold">Import Students from CSV</h3>
                                 <p className="text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                                    Upload a CSV with columns: roll_number, name (optional), email (optional)
+                                    Upload a CSV with columns: <strong>roll_number</strong>, name, email, password.<br />
+                                    Accounts are created automatically — students login directly, no sign-up needed.<br />
+                                    <span style={{ color: "var(--text-muted)" }}>If no password column: default password = roll number. If no email: roll@tenant.ceap</span>
                                 </p>
                             </div>
                             <button
