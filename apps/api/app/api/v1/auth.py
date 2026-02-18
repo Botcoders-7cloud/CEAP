@@ -2,13 +2,14 @@
 CEAP API — Auth Routes
 Handles registration, login, token refresh, and user profile.
 """
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime
 
 from app.database import get_db
-from app.models.tenant import Tenant, User
+from app.models.tenant import Tenant, User, StudentWhitelist
 from app.schemas.auth import (
     RegisterRequest, LoginRequest, TokenResponse, UserResponse,
     RefreshTokenRequest, UpdateProfileRequest
@@ -24,17 +25,54 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/register", response_model=TokenResponse, status_code=201)
 async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     """Register a new user under a tenant."""
+    # Validate role
+    if req.role not in ("student", "faculty"):
+        raise HTTPException(status_code=400, detail="Role must be 'student' or 'faculty'")
+
     # Find tenant
     result = await db.execute(select(Tenant).where(Tenant.slug == req.tenant_slug))
     tenant = result.scalar_one_or_none()
     if not tenant:
         raise HTTPException(status_code=404, detail="Organization not found")
-
-    # Check if tenant is active
     if not tenant.is_active:
         raise HTTPException(status_code=403, detail="Organization is inactive")
 
-    # Check duplicate email
+    # ── Role-specific validation ──────────────────────────────────────────
+    if req.role == "student":
+        # Validate join code
+        if tenant.join_code and req.join_code != tenant.join_code:
+            raise HTTPException(status_code=403, detail="Invalid join code")
+
+        # Validate roll number against whitelist (only if whitelist has entries)
+        if req.roll_number:
+            wl_result = await db.execute(
+                select(StudentWhitelist).where(
+                    StudentWhitelist.tenant_id == tenant.id,
+                    StudentWhitelist.roll_number == req.roll_number.strip().upper()
+                )
+            )
+            wl_entry = wl_result.scalar_one_or_none()
+            # If whitelist has ANY entries for this tenant, roll number must be in it
+            count_result = await db.execute(
+                select(StudentWhitelist).where(StudentWhitelist.tenant_id == tenant.id)
+            )
+            has_whitelist = len(count_result.scalars().all()) > 0
+            if has_whitelist and not wl_entry:
+                raise HTTPException(status_code=403, detail="Roll number not found in student list")
+            if wl_entry and wl_entry.is_registered:
+                raise HTTPException(status_code=409, detail="This roll number is already registered")
+        user_status = "active"
+
+    elif req.role == "faculty":
+        # Validate faculty key
+        if not req.faculty_key:
+            raise HTTPException(status_code=400, detail="Faculty key is required for faculty registration")
+        if tenant.faculty_key and req.faculty_key != tenant.faculty_key:
+            raise HTTPException(status_code=403, detail="Invalid faculty key")
+        # Faculty always starts as pending — admin must approve
+        user_status = "pending"
+
+    # Check duplicate email within tenant
     existing = await db.execute(
         select(User).where(User.tenant_id == tenant.id, User.email == req.email)
     )
@@ -42,24 +80,41 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Email already registered")
 
     # Check student limit
-    user_count = await db.execute(
-        select(User).where(User.tenant_id == tenant.id, User.role == "student")
-    )
-    if len(user_count.scalars().all()) >= tenant.max_students:
-        raise HTTPException(status_code=403, detail="Student limit reached for this organization")
+    if req.role == "student":
+        user_count_result = await db.execute(
+            select(User).where(User.tenant_id == tenant.id, User.role == "student")
+        )
+        if len(user_count_result.scalars().all()) >= tenant.max_students:
+            raise HTTPException(status_code=403, detail="Student limit reached for this organization")
 
     # Create user
+    roll = req.roll_number.strip().upper() if req.roll_number else None
     user = User(
         tenant_id=tenant.id,
         email=req.email,
         password_hash=hash_password(req.password),
         full_name=req.full_name,
-        role="student",
+        role=req.role,
+        status=user_status,
+        roll_number=roll,
         department=req.department,
         college_id=req.college_id,
     )
     db.add(user)
     await db.flush()
+
+    # Mark roll number as registered
+    if req.role == "student" and roll:
+        wl_update = await db.execute(
+            select(StudentWhitelist).where(
+                StudentWhitelist.tenant_id == tenant.id,
+                StudentWhitelist.roll_number == roll
+            )
+        )
+        wl_entry = wl_update.scalar_one_or_none()
+        if wl_entry:
+            wl_entry.is_registered = True
+
     await db.refresh(user)
 
     # Generate tokens
@@ -94,6 +149,15 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated")
+
+    # Block pending faculty
+    if user.status == "pending":
+        raise HTTPException(
+            status_code=403,
+            detail="Your account is pending admin approval. Please wait for approval."
+        )
+    if user.status == "suspended":
+        raise HTTPException(status_code=403, detail="Account has been suspended")
 
     # Update last login
     user.last_login = datetime.utcnow()

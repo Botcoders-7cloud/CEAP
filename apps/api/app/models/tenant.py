@@ -4,7 +4,7 @@ CEAP Database Models — Tenant & User
 import uuid
 from datetime import datetime
 from sqlalchemy import (
-    Column, String, Boolean, Integer, DateTime, Text, ForeignKey, UniqueConstraint
+    Column, String, Boolean, Integer, DateTime, Text, ForeignKey, UniqueConstraint, Index
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -27,6 +27,9 @@ class Tenant(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=True)
+    # Registration keys
+    join_code = Column(String(20), nullable=True)          # students must provide this
+    faculty_key = Column(String(20), nullable=True)        # faculty must provide this
 
     # Relationships
     users = relationship("User", back_populates="tenant", lazy="selectin")
@@ -49,6 +52,8 @@ class User(Base):
     avatar_url = Column(Text, nullable=True)
     email_verified = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
+    status = Column(String(20), default="active")          # active | pending | suspended
+    roll_number = Column(String(30), nullable=True)        # students only
     last_login = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -70,4 +75,20 @@ class AuditLog(Base):
     old_values = Column(JSON_TYPE(), nullable=True)
     new_values = Column(JSON_TYPE(), nullable=True)
     ip_address = Column(INET_TYPE(), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class StudentWhitelist(Base):
+    """Roll number whitelist — only whitelisted students can register."""
+    __tablename__ = "student_whitelist"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "roll_number", name="uq_tenant_roll"),
+    )
+
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(GUID(), ForeignKey("tenants.id"), nullable=False, index=True)
+    roll_number = Column(String(30), nullable=False)
+    name = Column(String(255), nullable=True)
+    email = Column(String(255), nullable=True)
+    is_registered = Column(Boolean, default=False)  # True once student registers
     created_at = Column(DateTime, default=datetime.utcnow)

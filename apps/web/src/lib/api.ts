@@ -153,3 +153,40 @@ export const submissionAPI = {
     leaderboard: (eventId: string, page?: number) =>
         api.get(`/events/${eventId}/leaderboard`, { params: { page } }),
 };
+
+// ── Admin APIs ───────────────────────────────
+export const adminAPI = {
+    // User management
+    listUsers: (params?: { role?: string; status?: string }) =>
+        api.get("/admin/users", { params }),
+
+    createUser: (data: { email: string; password: string; full_name: string; role: string; department?: string }) =>
+        api.post("/admin/users", data),
+
+    updateUser: (id: string, data: { role?: string; status?: string; is_active?: boolean }) =>
+        api.patch(`/admin/users/${id}`, data),
+
+    deleteUser: (id: string) =>
+        api.delete(`/admin/users/${id}`),
+
+    // Registration keys
+    getKeys: () => api.get("/admin/keys"),
+
+    rotateKeys: (data: { rotate_join_code?: boolean; rotate_faculty_key?: boolean }) =>
+        api.post("/admin/keys/rotate", data),
+
+    // Student whitelist
+    listStudents: () => api.get("/admin/students"),
+
+    importStudents: (file: File) => {
+        const form = new FormData();
+        form.append("file", file);
+        return api.post("/admin/students/import", form, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
+    },
+
+    removeStudent: (rollNumber: string) =>
+        api.delete(`/admin/students/${rollNumber}`),
+};
+

@@ -12,6 +12,10 @@ class RegisterRequest(BaseModel):
     password: str
     full_name: str
     tenant_slug: str
+    role: str = "student"           # "student" or "faculty"
+    join_code: Optional[str] = None     # required for students
+    faculty_key: Optional[str] = None   # required for faculty
+    roll_number: Optional[str] = None   # required for students
     department: Optional[str] = None
     college_id: Optional[str] = None
 
@@ -34,8 +38,10 @@ class UserResponse(BaseModel):
     email: str
     full_name: str
     role: str
+    status: str = "active"
     department: Optional[str] = None
     college_id: Optional[str] = None
+    roll_number: Optional[str] = None
     avatar_url: Optional[str] = None
     tenant_id: UUID
 
@@ -52,3 +58,28 @@ class UpdateProfileRequest(BaseModel):
     department: Optional[str] = None
     college_id: Optional[str] = None
     avatar_url: Optional[str] = None
+
+
+# ── Admin Schemas ─────────────────────────────
+class AdminCreateUserRequest(BaseModel):
+    email: str
+    password: str
+    full_name: str
+    role: str = "faculty"           # faculty or admin
+    department: Optional[str] = None
+
+
+class AdminUpdateUserRequest(BaseModel):
+    role: Optional[str] = None
+    status: Optional[str] = None    # active | pending | suspended
+    is_active: Optional[bool] = None
+
+
+class RotateKeysRequest(BaseModel):
+    rotate_join_code: bool = False
+    rotate_faculty_key: bool = False
+
+
+class KeysResponse(BaseModel):
+    join_code: Optional[str]
+    faculty_key: Optional[str]

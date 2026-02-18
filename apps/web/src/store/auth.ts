@@ -10,8 +10,10 @@ interface User {
     email: string;
     full_name: string;
     role: string;
+    status: string;
     department?: string;
     college_id?: string;
+    roll_number?: string;
     avatar_url?: string;
     tenant_id: string;
 }
@@ -29,6 +31,10 @@ interface AuthState {
         password: string;
         full_name: string;
         department?: string;
+        role?: string;
+        roll_number?: string;
+        join_code?: string;
+        faculty_key?: string;
     }) => Promise<void>;
     logout: () => void;
     loadUser: () => Promise<void>;
@@ -60,6 +66,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             ...regData,
             tenant_slug: tenantSlug,
         });
+        // Faculty accounts are pending — don't set as authenticated
+        if (data.user?.status === "pending") {
+            return; // caller handles the pending UI
+        }
         localStorage.setItem("ceap_token", data.access_token);
         localStorage.setItem("ceap_refresh_token", data.refresh_token);
         set({ user: data.user, isAuthenticated: true, isLoading: false });
