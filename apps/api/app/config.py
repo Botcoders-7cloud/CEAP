@@ -43,7 +43,11 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> list[str]:
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+        origins = [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        # Always allow localhost for dev
+        if "http://localhost:3000" not in origins:
+            origins.append("http://localhost:3000")
+        return origins
 
     @property
     def is_sqlite(self) -> bool:

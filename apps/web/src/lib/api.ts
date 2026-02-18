@@ -4,12 +4,17 @@
  */
 import axios from "axios";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://ceap-api.onrender.com";
+// Hardcoded production URL — avoids empty env var causing double-slash 404s
+const PROD_URL = "https://ceap-api.onrender.com";
+const RAW_URL = process.env.NEXT_PUBLIC_API_URL;
+// Only use env var if it's a non-empty, valid URL
+const API_URL = (RAW_URL && RAW_URL.startsWith("http")) ? RAW_URL.replace(/\/$/, "") : PROD_URL;
 
 const api = axios.create({
     baseURL: `${API_URL}/api/v1`,
     headers: { "Content-Type": "application/json" },
 });
+
 
 // Request interceptor: inject auth token
 api.interceptors.request.use((config) => {
