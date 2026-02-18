@@ -1,51 +1,35 @@
 "use client";
 /**
  * CEAP — Register Page
- * Role-based registration: Student (join code + roll number) or Faculty (faculty key → pending approval)
+ * Role-based registration: Student (roll + join code) or Faculty (faculty key + pending)
  */
 import { useState } from "react";
 import { useAuthStore } from "@/store/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { UserPlus, Eye, EyeOff, GraduationCap, BookOpen, Clock } from "lucide-react";
+import { UserPlus, Eye, EyeOff, GraduationCap, BookOpen, Clock, CheckCircle } from "lucide-react";
+
+type Role = "student" | "faculty";
 
 export default function RegisterPage() {
-    const [role, setRole] = useState<"student" | "faculty">("student");
-    const [fullName, setFullName] = useState("");
+    const [role, setRole] = useState<Role>("student");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [department, setDepartment] = useState("");
+    const [fullName, setFullName] = useState("");
     const [rollNumber, setRollNumber] = useState("");
     const [joinCode, setJoinCode] = useState("");
     const [facultyKey, setFacultyKey] = useState("");
+    const [department, setDepartment] = useState("");
     const [showPass, setShowPass] = useState(false);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
-    const [pendingApproval, setPendingApproval] = useState(false);
+    const [pending, setPending] = useState(false);
     const { register, setTenantSlug } = useAuthStore();
     const router = useRouter();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
-
-        if (password.length < 8) {
-            setError("Password must be at least 8 characters");
-            return;
-        }
-        if (role === "student" && !rollNumber.trim()) {
-            setError("Roll number is required for students");
-            return;
-        }
-        if (role === "student" && !joinCode.trim()) {
-            setError("Join code is required for students");
-            return;
-        }
-        if (role === "faculty" && !facultyKey.trim()) {
-            setError("Faculty key is required for faculty registration");
-            return;
-        }
-
         setLoading(true);
         try {
             setTenantSlug("demo");
@@ -53,236 +37,221 @@ export default function RegisterPage() {
                 email,
                 password,
                 full_name: fullName,
-                department: department || undefined,
+                tenant_slug: "demo",
                 role,
-                roll_number: role === "student" ? rollNumber.trim().toUpperCase() : undefined,
-                join_code: role === "student" ? joinCode.trim() : undefined,
-                faculty_key: role === "faculty" ? facultyKey.trim() : undefined,
+                roll_number: role === "student" ? rollNumber : undefined,
+                join_code: role === "student" ? joinCode : undefined,
+                faculty_key: role === "faculty" ? facultyKey : undefined,
+                department: department || undefined,
             });
-
             if (role === "faculty") {
-                setPendingApproval(true);
+                setPending(true);
             } else {
                 router.push("/dashboard");
             }
         } catch (err: any) {
-            setError(err.response?.data?.detail || "Registration failed. Please try again.");
+            setError(err.response?.data?.detail || "Registration failed");
         } finally {
             setLoading(false);
         }
     };
 
-    // Faculty pending approval screen
-    if (pendingApproval) {
+    /* ── Faculty Pending Screen ─────────────────────────── */
+    if (pending) {
         return (
-            <div className="min-h-screen flex items-center justify-center p-8">
-                <div className="w-full max-w-md text-center">
-                    <div
-                        className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
-                        style={{ background: "rgba(99,102,241,0.15)" }}
-                    >
-                        <Clock size={32} style={{ color: "var(--primary)" }} />
+            <div className="min-h-screen flex items-center justify-center p-6">
+                <div className="w-full max-w-md text-center animate-scale-in">
+                    <div className="card p-10 card-glow">
+                        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6"
+                            style={{ background: "rgba(245,158,11,0.1)" }}>
+                            <Clock size={28} style={{ color: "var(--warning)" }} />
+                        </div>
+                        <h2 className="text-xl font-bold mb-2">Pending Approval</h2>
+                        <p className="text-sm leading-relaxed mb-8" style={{ color: "var(--text-secondary)" }}>
+                            Your faculty account has been submitted. An admin will review
+                            and approve your access shortly.
+                        </p>
+                        <Link href="/login" className="btn-secondary inline-flex items-center gap-2 py-2.5 px-6">
+                            Back to Login
+                        </Link>
                     </div>
-                    <h1 className="text-2xl font-bold mb-2">Registration Submitted</h1>
-                    <p className="text-sm mb-6" style={{ color: "var(--text-secondary)" }}>
-                        Your faculty account is pending admin approval. You will be able to
-                        login once an administrator approves your account.
-                    </p>
-                    <Link href="/login" className="btn-primary inline-flex items-center gap-2 px-6 py-2.5">
-                        Back to Login
-                    </Link>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-8">
-            <div className="w-full max-w-md">
-                <div className="text-center mb-8">
-                    <div
-                        className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg mx-auto mb-3"
-                        style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}
-                    >
-                        C
-                    </div>
-                    <h1 className="text-2xl font-bold">Create your account</h1>
-                    <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-                        Join your campus events and contests
+        <div className="min-h-screen flex">
+            {/* ── Left: Branding (desktop) ─────────────────────── */}
+            <div className="hidden lg:flex lg:w-[48%] flex-col justify-between p-12 relative overflow-hidden"
+                style={{ background: "var(--surface-1)" }}>
+                <div style={{
+                    position: "absolute", inset: 0, pointerEvents: "none",
+                    background: `
+                        radial-gradient(ellipse 70% 60% at 0% 0%, rgba(124,58,237,0.15) 0%, transparent 70%),
+                        radial-gradient(ellipse 50% 50% at 100% 100%, rgba(6,182,212,0.08) 0%, transparent 70%)
+                    `,
+                }} />
+
+                <div className="relative z-10">
+                    <Link href="/" className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm"
+                            style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>C</div>
+                        <span className="text-xl font-bold tracking-tight gradient-text">CEAP</span>
+                    </Link>
+                </div>
+
+                <div className="relative z-10">
+                    <h1 className="text-4xl xl:text-5xl font-extrabold leading-[1.15] tracking-tight mb-5">
+                        Join Your<br />
+                        <span className="gradient-text">Campus Community</span>
+                    </h1>
+                    <p className="text-base leading-relaxed max-w-md" style={{ color: "var(--text-secondary)" }}>
+                        Register to access hackathons, coding contests, and campus events.
+                        Students get instant access. Faculty accounts require admin approval.
                     </p>
+
+                    {/* Role comparison */}
+                    <div className="mt-10 space-y-3">
+                        {[
+                            { icon: GraduationCap, text: "Students — instant access with join code" },
+                            { icon: BookOpen, text: "Faculty — access after admin approval" },
+                        ].map(({ icon: Icon, text }) => (
+                            <div key={text} className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                                    style={{ background: "rgba(124,58,237,0.08)" }}>
+                                    <Icon size={15} style={{ color: "var(--primary-light)" }} />
+                                </div>
+                                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{text}</p>
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
-                {/* Role Toggle */}
-                <div className="flex rounded-xl p-1 mb-6" style={{ background: "var(--surface-2)" }}>
-                    <button
-                        type="button"
-                        onClick={() => { setRole("student"); setError(""); }}
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all"
-                        style={{
-                            background: role === "student" ? "var(--primary)" : "transparent",
-                            color: role === "student" ? "white" : "var(--text-secondary)",
-                        }}
-                    >
-                        <GraduationCap size={16} />
-                        Student
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => { setRole("faculty"); setError(""); }}
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all"
-                        style={{
-                            background: role === "faculty" ? "var(--primary)" : "transparent",
-                            color: role === "faculty" ? "white" : "var(--text-secondary)",
-                        }}
-                    >
-                        <BookOpen size={16} />
-                        Faculty
-                    </button>
+                <div className="relative z-10">
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>© 2026 CEAP</p>
                 </div>
+            </div>
 
-                {role === "faculty" && (
-                    <div
-                        className="mb-4 p-3 rounded-lg text-sm flex items-start gap-2"
-                        style={{ background: "rgba(99,102,241,0.1)", color: "var(--primary)" }}
-                    >
-                        <Clock size={16} className="mt-0.5 shrink-0" />
-                        Faculty accounts require admin approval before you can login.
-                    </div>
-                )}
+            {/* ── Right: Form ─────────────────────────────────── */}
+            <div className="flex-1 flex items-center justify-center p-8 lg:p-16 relative">
+                <div style={{
+                    position: "absolute", top: 0, right: 0, width: "60%", height: "40%", pointerEvents: "none",
+                    background: "radial-gradient(ellipse at 100% 0%, rgba(124,58,237,0.04), transparent 70%)",
+                }} />
 
-                {error && (
-                    <div
-                        className="mb-4 p-3 rounded-lg text-sm"
-                        style={{ background: "rgba(239,68,68,0.1)", color: "var(--danger)" }}
-                    >
-                        {error}
-                    </div>
-                )}
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1.5">Full Name</label>
-                        <input
-                            type="text"
-                            className="input-field"
-                            placeholder="John Doe"
-                            value={fullName}
-                            onChange={(e) => setFullName(e.target.value)}
-                            required
-                        />
+                <div className="w-full max-w-[420px] relative z-10 animate-fade-in">
+                    {/* Mobile logo */}
+                    <div className="lg:hidden mb-6">
+                        <Link href="/" className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs"
+                                style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>C</div>
+                            <span className="text-lg font-bold gradient-text">CEAP</span>
+                        </Link>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1.5">Email</label>
-                        <input
-                            type="email"
-                            className="input-field"
-                            placeholder="you@college.edu"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                        />
-                    </div>
+                    <h2 className="text-2xl font-bold tracking-tight mb-1">Create an account</h2>
+                    <p className="text-sm mb-7" style={{ color: "var(--text-secondary)" }}>
+                        Select your role and fill in the details
+                    </p>
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1.5">Department</label>
-                        <input
-                            type="text"
-                            className="input-field"
-                            placeholder="Computer Science (optional)"
-                            value={department}
-                            onChange={(e) => setDepartment(e.target.value)}
-                        />
-                    </div>
-
-                    {/* Student-specific fields */}
-                    {role === "student" && (
-                        <>
-                            <div>
-                                <label className="block text-sm font-medium mb-1.5">Roll Number</label>
-                                <input
-                                    type="text"
-                                    className="input-field"
-                                    placeholder="e.g. 24Q91A0401"
-                                    value={rollNumber}
-                                    onChange={(e) => setRollNumber(e.target.value.toUpperCase())}
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1.5">Join Code</label>
-                                <input
-                                    type="text"
-                                    className="input-field"
-                                    placeholder="Provided by your institution"
-                                    value={joinCode}
-                                    onChange={(e) => setJoinCode(e.target.value)}
-                                    required
-                                />
-                            </div>
-                        </>
-                    )}
-
-                    {/* Faculty-specific field */}
-                    {role === "faculty" && (
-                        <div>
-                            <label className="block text-sm font-medium mb-1.5">Faculty Key</label>
-                            <input
-                                type="text"
-                                className="input-field"
-                                placeholder="Provided by admin (e.g. FAC-DEMO-2026)"
-                                value={facultyKey}
-                                onChange={(e) => setFacultyKey(e.target.value)}
-                                required
-                            />
-                        </div>
-                    )}
-
-                    <div>
-                        <label className="block text-sm font-medium mb-1.5">Password</label>
-                        <div className="relative">
-                            <input
-                                type={showPass ? "text" : "password"}
-                                className="input-field pr-10"
-                                placeholder="Min 8 characters"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                                minLength={8}
-                            />
+                    {/* ── Role Toggle ───────────────────────────── */}
+                    <div className="flex gap-1 p-1 rounded-xl mb-6" style={{ background: "var(--surface-2)" }}>
+                        {([
+                            { key: "student" as Role, label: "Student", icon: GraduationCap },
+                            { key: "faculty" as Role, label: "Faculty", icon: BookOpen },
+                        ]).map(opt => (
                             <button
-                                type="button"
-                                onClick={() => setShowPass(!showPass)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2"
-                                style={{ color: "var(--text-muted)" }}
+                                key={opt.key}
+                                onClick={() => setRole(opt.key)}
+                                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all duration-200"
+                                style={{
+                                    background: role === opt.key ? "var(--primary)" : "transparent",
+                                    color: role === opt.key ? "white" : "var(--text-muted)",
+                                    boxShadow: role === opt.key ? "0 2px 8px rgba(124,58,237,0.3)" : "none",
+                                }}
                             >
-                                {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                                <opt.icon size={15} />
+                                {opt.label}
                             </button>
-                        </div>
+                        ))}
                     </div>
 
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="btn-primary w-full flex items-center justify-center gap-2 py-3 disabled:opacity-50"
-                    >
-                        {loading ? (
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        ) : (
+                    {error && (
+                        <div className="mb-5 p-3.5 rounded-xl text-sm flex items-start gap-2"
+                            style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", color: "var(--danger)" }}>
+                            <span className="shrink-0 mt-0.5">⚠️</span>
+                            {error}
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div>
+                            <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-secondary)" }}>Full Name</label>
+                            <input className="input-field" placeholder="John Doe" value={fullName} onChange={e => setFullName(e.target.value)} required />
+                        </div>
+                        <div>
+                            <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-secondary)" }}>Email</label>
+                            <input className="input-field" type="email" placeholder="you@college.edu" value={email} onChange={e => setEmail(e.target.value)} required />
+                        </div>
+                        <div>
+                            <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-secondary)" }}>Password</label>
+                            <div className="relative">
+                                <input className="input-field" style={{ paddingRight: 44 }} type={showPass ? "text" : "password"} placeholder="Min 8 characters" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} />
+                                <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded" style={{ color: "var(--text-muted)" }} tabIndex={-1}>
+                                    {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Student-specific fields */}
+                        {role === "student" && (
                             <>
-                                <UserPlus size={18} />
-                                {role === "faculty" ? "Submit for Approval" : "Create Account"}
+                                <div>
+                                    <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-secondary)" }}>Roll Number</label>
+                                    <input className="input-field font-mono" placeholder="e.g. 24Q91A0401" value={rollNumber} onChange={e => setRollNumber(e.target.value)} required />
+                                </div>
+                                <div>
+                                    <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-secondary)" }}>Join Code</label>
+                                    <input className="input-field font-mono tracking-widest" placeholder="Ask your admin for the code" value={joinCode} onChange={e => setJoinCode(e.target.value)} required />
+                                </div>
                             </>
                         )}
-                    </button>
-                </form>
 
-                <p className="mt-6 text-center text-sm" style={{ color: "var(--text-muted)" }}>
-                    Already have an account?{" "}
-                    <Link href="/login" className="font-medium" style={{ color: "var(--primary)" }}>
-                        Sign in
-                    </Link>
-                </p>
+                        {/* Faculty-specific field */}
+                        {role === "faculty" && (
+                            <div>
+                                <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-secondary)" }}>Faculty Key</label>
+                                <input className="input-field font-mono tracking-widest" placeholder="Provided by admin" value={facultyKey} onChange={e => setFacultyKey(e.target.value)} required />
+                            </div>
+                        )}
+
+                        <div>
+                            <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-secondary)" }}>Department <span style={{ color: "var(--text-muted)" }}>(optional)</span></label>
+                            <input className="input-field" placeholder="e.g. Computer Science" value={department} onChange={e => setDepartment(e.target.value)} />
+                        </div>
+
+                        <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2.5 py-3 mt-2 disabled:opacity-50">
+                            {loading ? (
+                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            ) : (
+                                <>
+                                    <UserPlus size={17} />
+                                    {role === "faculty" ? "Submit for Approval" : "Create Account"}
+                                </>
+                            )}
+                        </button>
+                    </form>
+
+                    <div className="divider my-7" />
+
+                    <p className="text-center text-sm" style={{ color: "var(--text-muted)" }}>
+                        Already have an account?{" "}
+                        <Link href="/login" className="font-semibold transition-colors hover:underline" style={{ color: "var(--primary-light)" }}>
+                            Sign in
+                        </Link>
+                    </p>
+                </div>
             </div>
         </div>
     );
