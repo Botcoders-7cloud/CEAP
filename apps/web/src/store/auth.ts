@@ -38,12 +38,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     user: null,
     isLoading: true,
     isAuthenticated: false,
-    tenantSlug: "",
+    tenantSlug: "demo",
 
     setTenantSlug: (slug: string) => set({ tenantSlug: slug }),
 
-    login: async (email: string, password: string) => {
-        const { tenantSlug } = get();
+    login: async (email: string, password: string, slug?: string) => {
+        const tenantSlug = slug || get().tenantSlug || "demo";
         const { data } = await authAPI.login({
             email,
             password,
@@ -55,7 +55,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     },
 
     register: async (regData) => {
-        const { tenantSlug } = get();
+        const tenantSlug = get().tenantSlug || "demo";
         const { data } = await authAPI.register({
             ...regData,
             tenant_slug: tenantSlug,
