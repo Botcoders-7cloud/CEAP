@@ -207,3 +207,12 @@ export const adminAPI = {
         api.delete(`/admin/students/${rollNumber}`),
 };
 
+// ── Certificate APIs ─────────────────────────
+export const certificateAPI = {
+    my: () => api.get("/certificates/my"),
+    verify: (verificationId: string) => api.get(`/certificates/verify/${verificationId}`),
+    markDownloaded: (certId: string) => api.post(`/certificates/${certId}/downloaded`),
+    generateForEvent: (eventId: string) => api.post(`/events/${eventId}/generate-certificates`),
+};
+
+
