@@ -1,8 +1,5 @@
 "use client";
-/**
- * CEAP — Login Page
- * Premium split-screen: animated branding left, clean form right
- */
+
 import { useState } from "react";
 import { useAuthStore } from "@/store/auth";
 import { useRouter } from "next/navigation";
@@ -12,126 +9,81 @@ import { LogIn, Eye, EyeOff } from "lucide-react";
 export default function LoginPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [showPass, setShowPass] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
-    const { login, setTenantSlug } = useAuthStore();
+    const { login } = useAuthStore();
     const router = useRouter();
-
-    const tenantSlug = "demo";
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
         setLoading(true);
         try {
-            setTenantSlug(tenantSlug);
             await login(email, password);
             router.push("/dashboard");
-        } catch (err: any) {
-            setError(err.response?.data?.detail || "Login failed. Please try again.");
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Login failed";
+            setError(message);
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen flex">
-            {/* ── Left: Branding ──────────────────────────────────── */}
-            <div className="hidden lg:flex lg:w-[48%] flex-col justify-between p-12 relative overflow-hidden"
-                style={{ background: "var(--surface-1)" }}>
-                {/* Mesh gradient blobs */}
-                <div style={{
-                    position: "absolute", inset: 0, pointerEvents: "none",
-                    background: `
-                        radial-gradient(ellipse 70% 60% at 0% 0%, rgba(124,58,237,0.15) 0%, transparent 70%),
-                        radial-gradient(ellipse 50% 50% at 100% 100%, rgba(6,182,212,0.08) 0%, transparent 70%)
-                    `,
-                }} />
+        <div style={{ minHeight: "100vh", display: "flex", background: "var(--bg-dark)" }}>
 
-                {/* Top — Logo */}
-                <div className="relative z-10">
-                    <Link href="/" className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm"
-                            style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
-                            C
-                        </div>
-                        <span className="text-xl font-bold tracking-tight gradient-text">CEAP</span>
-                    </Link>
-                </div>
+            {/* ── Left — Branding panel ── */}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "48px 56px" }}
+                className="hidden lg:flex">
 
-                {/* Center — Tagline */}
-                <div className="relative z-10">
-                    <h1 className="text-4xl xl:text-5xl font-extrabold leading-[1.15] tracking-tight mb-5">
-                        Campus Event &<br />
-                        <span className="gradient-text">Assessment Platform</span>
+                <Link href="/" className="flex items-center gap-2.5">
+                    <div style={{ width: 32, height: 32, borderRadius: 7, background: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, color: "#1A1918" }}>C</div>
+                    <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.02em", color: "var(--text-primary)" }}>CEAP</span>
+                </Link>
+
+                <div style={{ maxWidth: 380 }}>
+                    <h1 style={{ fontSize: 32, fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.03em", color: "var(--text-primary)", marginBottom: 16 }}>
+                        Campus Event &<br />Assessment Platform
                     </h1>
-                    <p className="text-base leading-relaxed max-w-md" style={{ color: "var(--text-secondary)" }}>
-                        Host hackathons, run coding contests, auto-grade submissions,
-                        and generate certificates — all in one place.
+                    <p style={{ fontSize: 15, lineHeight: 1.6, color: "var(--text-secondary)" }}>
+                        Streamline and elevate your campus engagement and event management.
                     </p>
-
-                    {/* Metrics */}
-                    <div className="flex gap-8 mt-10">
-                        {[
-                            { val: "50+", label: "Events" },
-                            { val: "10K", label: "Students" },
-                            { val: "99.9%", label: "Uptime" },
-                        ].map(m => (
-                            <div key={m.label}>
-                                <p className="text-2xl font-bold" style={{ color: "var(--primary-light)" }}>{m.val}</p>
-                                <p className="text-xs uppercase tracking-widest mt-1" style={{ color: "var(--text-muted)" }}>{m.label}</p>
-                            </div>
-                        ))}
-                    </div>
                 </div>
 
-                {/* Bottom */}
-                <div className="relative z-10">
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        © 2026 CEAP · Secure & Trusted
-                    </p>
+                <div style={{ display: "flex", gap: 32 }}>
+                    {[
+                        { val: "50+", label: "Events" },
+                        { val: "10K", label: "Students" },
+                        { val: "99.9%", label: "Uptime" },
+                    ].map((m) => (
+                        <div key={m.label}>
+                            <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>{m.val}</div>
+                            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>{m.label}</div>
+                        </div>
+                    ))}
                 </div>
             </div>
 
-            {/* ── Right: Form ─────────────────────────────────────── */}
-            <div className="flex-1 flex items-center justify-center p-8 lg:p-16 relative">
-                {/* Subtle gradient in background */}
-                <div style={{
-                    position: "absolute", top: 0, right: 0, width: "60%", height: "40%", pointerEvents: "none",
-                    background: "radial-gradient(ellipse at 100% 0%, rgba(124,58,237,0.04), transparent 70%)",
-                }} />
-
-                <div className="w-full max-w-[400px] relative z-10 animate-fade-in">
-                    {/* Mobile logo */}
-                    <div className="lg:hidden mb-8">
-                        <Link href="/" className="flex items-center gap-2 mb-1">
-                            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs"
-                                style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
-                                C
-                            </div>
-                            <span className="text-lg font-bold gradient-text">CEAP</span>
-                        </Link>
-                    </div>
-
-                    <h2 className="text-2xl font-bold tracking-tight mb-1">Welcome back</h2>
-                    <p className="text-sm mb-8" style={{ color: "var(--text-secondary)" }}>
-                        Sign in to continue to your dashboard
+            {/* ── Right — Login form ── */}
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px", background: "var(--bg-elevated)" }}>
+                <div style={{ width: "100%", maxWidth: 380 }}>
+                    <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text-primary)", marginBottom: 6 }}>
+                        Welcome back
+                    </h2>
+                    <p style={{ fontSize: 14, color: "var(--text-secondary)", marginBottom: 32 }}>
+                        Sign in to your account to continue
                     </p>
 
-                    {error && (
-                        <div className="mb-5 p-3.5 rounded-xl text-sm flex items-start gap-2"
-                            style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", color: "var(--danger)" }}>
-                            <span className="shrink-0 mt-0.5">⚠️</span>
-                            {error}
-                        </div>
-                    )}
+                    <form onSubmit={handleSubmit}>
+                        {error && (
+                            <div style={{ padding: "10px 14px", borderRadius: "var(--radius-md)", background: "rgba(201, 112, 112, 0.1)", border: "1px solid rgba(201, 112, 112, 0.2)", color: "var(--danger)", fontSize: 13, marginBottom: 20 }}>
+                                {error}
+                            </div>
+                        )}
 
-                    <form onSubmit={handleSubmit} className="space-y-5">
-                        <div>
-                            <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
-                                Email
-                            </label>
+                        <div style={{ marginBottom: 16 }}>
+                            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 6 }}>Email</label>
                             <input
                                 type="email"
                                 className="input-field"
@@ -139,33 +91,27 @@ export default function LoginPage() {
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
-                                autoComplete="email"
                             />
                         </div>
 
-                        <div>
-                            <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
-                                Password
-                            </label>
-                            <div className="relative">
+                        <div style={{ marginBottom: 24 }}>
+                            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 6 }}>Password</label>
+                            <div style={{ position: "relative" }}>
                                 <input
-                                    type={showPass ? "text" : "password"}
+                                    type={showPassword ? "text" : "password"}
                                     className="input-field"
-                                    style={{ paddingRight: 44 }}
                                     placeholder="••••••••"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
-                                    autoComplete="current-password"
+                                    style={{ paddingRight: 44 }}
                                 />
                                 <button
                                     type="button"
-                                    onClick={() => setShowPass(!showPass)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors hover:bg-white/5"
-                                    style={{ color: "var(--text-muted)" }}
-                                    tabIndex={-1}
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 4 }}
                                 >
-                                    {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                                 </button>
                             </div>
                         </div>
@@ -173,22 +119,17 @@ export default function LoginPage() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="btn-primary w-full flex items-center justify-center gap-2.5 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="btn-primary"
+                            style={{ width: "100%", padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: loading ? 0.7 : 1 }}
                         >
-                            {loading ? (
-                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            ) : (
-                                <>
-                                    <LogIn size={17} />
-                                    Sign In
-                                </>
-                            )}
+                            <LogIn size={16} />
+                            {loading ? "Signing in..." : "Sign in"}
                         </button>
                     </form>
 
-                    <div className="divider my-8" />
+                    <div className="divider" style={{ margin: "28px 0" }} />
 
-                    <p className="text-center text-xs" style={{ color: "var(--text-muted)" }}>
+                    <p style={{ textAlign: "center", fontSize: 12, color: "var(--text-muted)" }}>
                         All accounts are managed by your administrator.
                     </p>
                 </div>
