@@ -90,6 +90,42 @@ class SubmissionCreate(BaseModel):
     source_code: str
 
 
+# Run = test against sample cases, no DB save
+class RunRequest(BaseModel):
+    event_id: UUID
+    problem_id: UUID
+    language: str
+    source_code: str
+    custom_input: Optional[str] = None  # optional custom stdin
+
+
+class RunResult(BaseModel):
+    """Result for a single test case run."""
+    test_case_index: int = 0
+    input: str = ""
+    expected_output: Optional[str] = None
+    stdout: str = ""
+    stderr: str = ""
+    compile_output: str = ""
+    status: str = "pending"
+    passed: bool = False
+    execution_time: int = 0
+    memory_used: int = 0
+
+
+class RunResponse(BaseModel):
+    """Response for the Run endpoint — returns output immediately."""
+    status: str  # accepted, wrong_answer, compile_error, runtime_error, tle
+    stdout: str = ""
+    stderr: str = ""
+    compile_output: str = ""
+    execution_time: int = 0
+    memory_used: int = 0
+    passed_count: int = 0
+    total_count: int = 0
+    test_results: List[RunResult] = []
+
+
 class SubmissionResponse(BaseModel):
     id: UUID
     event_id: UUID
@@ -107,8 +143,20 @@ class SubmissionResponse(BaseModel):
         from_attributes = True
 
 
-class SubmissionDetailResponse(SubmissionResponse):
+class SubmissionDetailResponse(BaseModel):
+    """Full submission details — built manually to avoid lazy-loading."""
+    id: UUID
+    event_id: UUID
+    problem_id: UUID
+    user_id: UUID
+    language: str
     source_code: str
+    status: str
+    score: Optional[float] = None
+    execution_time: Optional[int] = None
+    memory_used: Optional[int] = None
+    submitted_at: datetime
+    judged_at: Optional[datetime] = None
     results: List["SubmissionResultResponse"] = []
 
 
@@ -117,6 +165,8 @@ class SubmissionResultResponse(BaseModel):
     test_case_id: Optional[UUID] = None
     status: Optional[str] = None
     actual_output: Optional[str] = None
+    stderr: Optional[str] = None
+    compile_output: Optional[str] = None
     execution_time: Optional[int] = None
     memory_used: Optional[int] = None
     passed: bool

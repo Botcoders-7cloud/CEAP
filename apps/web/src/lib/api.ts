@@ -78,6 +78,9 @@ export const authAPI = {
 
     updateProfile: (data: { full_name?: string; department?: string }) =>
         api.put("/auth/me", data),
+
+    changePassword: (data: { old_password: string; new_password: string }) =>
+        api.post("/auth/change-password", data),
 };
 
 // ── Event APIs ───────────────────────────────
@@ -138,6 +141,16 @@ export const problemAPI = {
 
 // ── Submission APIs ──────────────────────────
 export const submissionAPI = {
+    // Run = test against sample cases, no DB save
+    run: (data: {
+        event_id: string;
+        problem_id: string;
+        language: string;
+        source_code: string;
+        custom_input?: string;
+    }) => api.post("/submissions/run", data),
+
+    // Submit = full grading with score + leaderboard
     create: (data: {
         event_id: string;
         problem_id: string;
@@ -163,7 +176,7 @@ export const adminAPI = {
     createUser: (data: { email: string; password: string; full_name: string; role: string; department?: string }) =>
         api.post("/admin/users", data),
 
-    updateUser: (id: string, data: { role?: string; status?: string; is_active?: boolean }) =>
+    updateUser: (id: string, data: { full_name?: string; department?: string; role?: string; status?: string; is_active?: boolean; password?: string }) =>
         api.patch(`/admin/users/${id}`, data),
 
     deleteUser: (id: string) =>
@@ -178,13 +191,17 @@ export const adminAPI = {
     // Student whitelist
     listStudents: () => api.get("/admin/students"),
 
-    importStudents: (file: File) => {
+    importStudents: (file: File, department?: string) => {
         const form = new FormData();
         form.append("file", file);
+        if (department) form.append("department", department);
         return api.post("/admin/students/import", form, {
             headers: { "Content-Type": "multipart/form-data" },
         });
     },
+
+    bulkUpdate: (data: { user_ids: string[]; action: string; department?: string }) =>
+        api.post("/admin/users/bulk-update", data),
 
     removeStudent: (rollNumber: string) =>
         api.delete(`/admin/students/${rollNumber}`),

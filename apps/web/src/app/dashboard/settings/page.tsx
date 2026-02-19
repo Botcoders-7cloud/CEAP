@@ -1,21 +1,20 @@
 "use client";
 /**
- * CEAP — Settings Page (Admin)
- * Platform configuration, branding, and account settings.
+ * CEAP — Settings Page
+ * Profile, security (change password), organization, and notifications.
  */
 import { useState } from "react";
 import { useAuthStore } from "@/store/auth";
+import { authAPI } from "@/lib/api";
 import {
     Settings as SettingsIcon,
-    Palette,
     Shield,
     Bell,
-    Globe,
-    Key,
     Save,
     CheckCircle,
     User,
     Building2,
+    Lock,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -28,11 +27,18 @@ export default function SettingsPage() {
         department: user?.department || "",
     });
 
+    // Password change state
+    const [oldPassword, setOldPassword] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [pwdLoading, setPwdLoading] = useState(false);
+    const [pwdMsg, setPwdMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
     const [tenant, setTenant] = useState({
         name: "Demo University",
         slug: "demo",
-        primary_color: "#6366f1",
-        secondary_color: "#06b6d4",
+        primary_color: "#C8956C",
+        secondary_color: "#6B9E78",
         plan: "campus",
         max_events: 50,
         max_students: 1000,
@@ -41,6 +47,27 @@ export default function SettingsPage() {
     const handleSave = () => {
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
+    };
+
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setPwdMsg(null);
+        if (newPassword.length < 6) {
+            setPwdMsg({ type: "error", text: "New password must be at least 6 characters" });
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            setPwdMsg({ type: "error", text: "New passwords do not match" });
+            return;
+        }
+        setPwdLoading(true);
+        try {
+            await authAPI.changePassword({ old_password: oldPassword, new_password: newPassword });
+            setPwdMsg({ type: "success", text: "Password changed successfully" });
+            setOldPassword(""); setNewPassword(""); setConfirmPassword("");
+        } catch (err: any) {
+            setPwdMsg({ type: "error", text: err.response?.data?.detail || "Failed to change password" });
+        } finally { setPwdLoading(false); }
     };
 
     return (
@@ -57,8 +84,8 @@ export default function SettingsPage() {
             </div>
 
             {/* Profile Section */}
-            <div className="glass-card p-6 space-y-4">
-                <h3 className="text-sm font-semibold flex items-center gap-2 pb-3 border-b" style={{ borderColor: "var(--border-color)" }}>
+            <div className="card p-6 space-y-4">
+                <h3 className="text-sm font-semibold flex items-center gap-2 pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
                     <User size={16} style={{ color: "var(--primary)" }} />
                     Profile Settings
                 </h3>
@@ -82,92 +109,84 @@ export default function SettingsPage() {
                 </div>
             </div>
 
-            {/* Tenant/Branding Section */}
-            <div className="glass-card p-6 space-y-4">
-                <h3 className="text-sm font-semibold flex items-center gap-2 pb-3 border-b" style={{ borderColor: "var(--border-color)" }}>
-                    <Building2 size={16} style={{ color: "var(--accent)" }} />
-                    Organization Settings
+            {/* Change Password Section */}
+            <div className="card p-6 space-y-4">
+                <h3 className="text-sm font-semibold flex items-center gap-2 pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
+                    <Lock size={16} style={{ color: "#C97070" }} />
+                    Change Password
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Organization Name</label>
-                        <input className="input-field" value={tenant.name} onChange={(e) => setTenant({ ...tenant, name: e.target.value })} />
-                    </div>
-                    <div>
-                        <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Slug</label>
-                        <input className="input-field" value={tenant.slug} disabled style={{ opacity: 0.6 }} />
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <div>
-                        <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Primary Color</label>
-                        <div className="flex items-center gap-2">
-                            <input type="color" value={tenant.primary_color} onChange={(e) => setTenant({ ...tenant, primary_color: e.target.value })}
-                                className="w-8 h-8 rounded-lg border-0 cursor-pointer" />
-                            <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>{tenant.primary_color}</span>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Secondary Color</label>
-                        <div className="flex items-center gap-2">
-                            <input type="color" value={tenant.secondary_color} onChange={(e) => setTenant({ ...tenant, secondary_color: e.target.value })}
-                                className="w-8 h-8 rounded-lg border-0 cursor-pointer" />
-                            <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>{tenant.secondary_color}</span>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Max Events</label>
-                        <input type="number" className="input-field" value={tenant.max_events} onChange={(e) => setTenant({ ...tenant, max_events: +e.target.value })} />
-                    </div>
-                    <div>
-                        <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Max Students</label>
-                        <input type="number" className="input-field" value={tenant.max_students} onChange={(e) => setTenant({ ...tenant, max_students: +e.target.value })} />
-                    </div>
-                </div>
-
-                <div>
-                    <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Current Plan</label>
-                    <div className="flex gap-3">
-                        {["starter", "campus", "university"].map((plan) => (
-                            <div key={plan} className={`flex-1 p-3 rounded-xl text-center cursor-pointer transition-all border ${tenant.plan === plan ? "border-[var(--primary)]" : ""}`}
-                                style={{
-                                    background: tenant.plan === plan ? "rgba(99,102,241,0.1)" : "var(--bg-card-hover)",
-                                    borderColor: tenant.plan === plan ? "var(--primary)" : "transparent",
-                                }}
-                                onClick={() => setTenant({ ...tenant, plan })}>
-                                <p className="text-sm font-semibold capitalize">{plan}</p>
-                                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                                    {plan === "starter" ? "10 events" : plan === "campus" ? "50 events" : "Unlimited"}
-                                </p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-
-            {/* Security Section */}
-            <div className="glass-card p-6 space-y-4">
-                <h3 className="text-sm font-semibold flex items-center gap-2 pb-3 border-b" style={{ borderColor: "var(--border-color)" }}>
-                    <Shield size={16} style={{ color: "#ef4444" }} />
-                    Security
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <form onSubmit={handleChangePassword} className="space-y-4">
                     <div>
                         <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Current Password</label>
-                        <input type="password" className="input-field" placeholder="••••••••" />
+                        <input type="password" className="input-field" placeholder="••••••••" value={oldPassword}
+                            onChange={(e) => setOldPassword(e.target.value)} required />
                     </div>
-                    <div>
-                        <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>New Password</label>
-                        <input type="password" className="input-field" placeholder="••••••••" />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>New Password</label>
+                            <input type="password" className="input-field" placeholder="Min 6 characters" value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)} required minLength={6} />
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Confirm New Password</label>
+                            <input type="password" className="input-field" placeholder="Repeat new password" value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)} required minLength={6} />
+                        </div>
                     </div>
-                </div>
+
+                    {pwdMsg && (
+                        <div className="px-4 py-2.5 rounded-lg text-sm"
+                            style={{
+                                background: pwdMsg.type === "success" ? "rgba(107,158,120,0.08)" : "rgba(201,112,112,0.08)",
+                                border: `1px solid ${pwdMsg.type === "success" ? "rgba(107,158,120,0.15)" : "rgba(201,112,112,0.15)"}`,
+                                color: pwdMsg.type === "success" ? "#6B9E78" : "#C97070",
+                            }}>
+                            {pwdMsg.text}
+                        </div>
+                    )}
+
+                    <button type="submit" disabled={pwdLoading} className="btn-primary text-sm px-5 py-2.5 flex items-center gap-2"
+                        style={{ opacity: pwdLoading ? 0.7 : 1 }}>
+                        <Shield size={14} />
+                        {pwdLoading ? "Changing..." : "Change Password"}
+                    </button>
+                </form>
             </div>
 
+            {/* Tenant/Branding Section (Admin only) */}
+            {user?.role === "admin" && (
+                <div className="card p-6 space-y-4">
+                    <h3 className="text-sm font-semibold flex items-center gap-2 pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
+                        <Building2 size={16} style={{ color: "var(--primary)" }} />
+                        Organization Settings
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Organization Name</label>
+                            <input className="input-field" value={tenant.name} onChange={(e) => setTenant({ ...tenant, name: e.target.value })} />
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Slug</label>
+                            <input className="input-field" value={tenant.slug} disabled style={{ opacity: 0.6 }} />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div>
+                            <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Max Events</label>
+                            <input type="number" className="input-field" value={tenant.max_events} onChange={(e) => setTenant({ ...tenant, max_events: +e.target.value })} />
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Max Students</label>
+                            <input type="number" className="input-field" value={tenant.max_students} onChange={(e) => setTenant({ ...tenant, max_students: +e.target.value })} />
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Notification Preferences */}
-            <div className="glass-card p-6 space-y-4">
-                <h3 className="text-sm font-semibold flex items-center gap-2 pb-3 border-b" style={{ borderColor: "var(--border-color)" }}>
-                    <Bell size={16} style={{ color: "var(--warning)" }} />
+            <div className="card p-6 space-y-4">
+                <h3 className="text-sm font-semibold flex items-center gap-2 pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
+                    <Bell size={16} style={{ color: "#D4956A" }} />
                     Notifications
                 </h3>
                 <div className="space-y-3">
@@ -179,7 +198,7 @@ export default function SettingsPage() {
                         <label key={pref.key} className="flex items-center justify-between cursor-pointer py-1">
                             <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{pref.label}</span>
                             <input type="checkbox" defaultChecked={pref.default}
-                                className="w-4 h-4 rounded accent-[var(--primary)]" />
+                                style={{ accentColor: "var(--primary)", width: 16, height: 16 }} />
                         </label>
                     ))}
                 </div>

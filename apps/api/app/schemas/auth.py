@@ -70,9 +70,12 @@ class AdminCreateUserRequest(BaseModel):
 
 
 class AdminUpdateUserRequest(BaseModel):
+    full_name: Optional[str] = None
+    department: Optional[str] = None
     role: Optional[str] = None
     status: Optional[str] = None    # active | pending | suspended
     is_active: Optional[bool] = None
+    password: Optional[str] = None  # admin can reset user's password
 
 
 class RotateKeysRequest(BaseModel):

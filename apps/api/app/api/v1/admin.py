@@ -6,9 +6,11 @@ All endpoints require role == "admin" in the JWT.
 import secrets
 import csv
 import io
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from pydantic import BaseModel
 from datetime import datetime
 
 from app.database import get_db
@@ -89,7 +91,7 @@ async def update_user(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    """Approve, suspend, or change role of a user."""
+    """Update user details — name, department, role, status, or password."""
     result = await db.execute(
         select(User).where(User.id == user_id, User.tenant_id == admin.tenant_id)
     )
@@ -97,6 +99,10 @@ async def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    if req.full_name is not None:
+        user.full_name = req.full_name
+    if req.department is not None:
+        user.department = req.department
     if req.role is not None:
         if req.role not in ("student", "faculty", "admin"):
             raise HTTPException(status_code=400, detail="Invalid role")
@@ -105,11 +111,14 @@ async def update_user(
         if req.status not in ("active", "pending", "suspended"):
             raise HTTPException(status_code=400, detail="Invalid status")
         user.status = req.status
-        # Sync is_active with status
         user.is_active = req.status == "active"
     if req.is_active is not None:
         user.is_active = req.is_active
         user.status = "active" if req.is_active else "suspended"
+    if req.password is not None:
+        if len(req.password) < 6:
+            raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+        user.password_hash = hash_password(req.password)
 
     await db.flush()
     await db.refresh(user)
@@ -136,6 +145,46 @@ async def delete_user(
     user.status = "suspended"
     await db.flush()
     return {"message": "User deactivated"}
+
+
+class BulkUpdateRequest(BaseModel):
+    user_ids: List[str]
+    action: str  # "deactivate" or "update_department"
+    department: Optional[str] = None
+
+
+@router.post("/users/bulk-update")
+async def bulk_update_users(
+    req: BulkUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    """Bulk deactivate or change department for selected users."""
+    if not req.user_ids:
+        raise HTTPException(status_code=400, detail="No users selected")
+
+    result = await db.execute(
+        select(User).where(
+            User.id.in_(req.user_ids),
+            User.tenant_id == admin.tenant_id,
+        )
+    )
+    users = result.scalars().all()
+    updated = 0
+
+    for user in users:
+        if user.role == "admin":
+            continue  # skip admin accounts
+        if req.action == "deactivate":
+            user.is_active = False
+            user.status = "suspended"
+            updated += 1
+        elif req.action == "update_department" and req.department is not None:
+            user.department = req.department
+            updated += 1
+
+    await db.flush()
+    return {"message": f"{updated} users updated", "updated": updated}
 
 
 # ── Registration Keys ─────────────────────────────────────────────────────────
@@ -201,6 +250,7 @@ async def list_students(
 @router.post("/students/import")
 async def import_students_csv(
     file: UploadFile = File(...),
+    department: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
@@ -294,6 +344,7 @@ async def import_students_csv(
                 role="student",
                 status="active",
                 roll_number=roll,
+                department=department,
             )
             db.add(user)
             inserted += 1

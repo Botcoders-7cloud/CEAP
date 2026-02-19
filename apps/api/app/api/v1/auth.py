@@ -4,6 +4,7 @@ Handles registration, login, token refresh, and user profile.
 """
 import secrets
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime
@@ -212,3 +213,25 @@ async def update_me(
     await db.flush()
     await db.refresh(user)
     return UserResponse.model_validate(user)
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+
+@router.post("/change-password")
+async def change_password(
+    req: ChangePasswordRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """User changes their own password. Must provide current password."""
+    if not verify_password(req.old_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if len(req.new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+    user.password_hash = hash_password(req.new_password)
+    await db.flush()
+    return {"message": "Password changed successfully"}
+

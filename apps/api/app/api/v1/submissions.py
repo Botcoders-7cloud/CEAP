@@ -1,12 +1,16 @@
 """
 CEAP API — Submissions & Problems Routes
+Fixed: SubmissionDetailResponse validation, rate-limit datetime,
+       added Run endpoint, proper error capture.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlalchemy import select, func
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timedelta
 import asyncio
+import json
 
 from app.database import get_db
 from app.models.tenant import User
@@ -21,6 +25,7 @@ from app.schemas.submission import (
     TestCaseCreate, TestCaseResponse,
     SubmissionCreate, SubmissionResponse, SubmissionDetailResponse,
     SubmissionResultResponse,
+    RunRequest, RunResponse, RunResult,
 )
 from app.core.security import get_current_user, require_faculty
 from app.services.judge_service import judge_service
@@ -128,7 +133,175 @@ async def list_test_cases(
     return [TestCaseResponse.model_validate(tc) for tc in result.scalars().all()]
 
 
-# ── Submissions ─────────────────────────────────────────────
+# ── Run (test against sample cases, no grading) ─────────────
+
+@router.post("/submissions/run", response_model=RunResponse)
+async def run_code(
+    req: RunRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Run code against sample test cases only.
+    Returns stdout/stderr immediately — no DB save, no leaderboard.
+    """
+    # Rate limit: max 1 run per 5 seconds
+    # (lightweight — just use in-memory or skip for now)
+
+    # Get problem
+    problem = (await db.execute(
+        select(Problem).where(Problem.id == req.problem_id)
+    )).scalar_one_or_none()
+    if not problem:
+        raise HTTPException(status_code=404, detail="Problem not found")
+
+    # Validate language
+    if req.language not in (problem.allowed_languages or []):
+        raise HTTPException(status_code=400, detail=f"Language '{req.language}' not allowed")
+
+    # If custom input provided, run with that (no expected output)
+    if req.custom_input is not None:
+        result = await judge_service.execute(
+            source_code=req.source_code,
+            language=req.language,
+            stdin=req.custom_input,
+            expected_output=None,
+            time_limit=problem.time_limit_ms / 1000.0,
+            memory_limit=problem.memory_limit_kb,
+        )
+        return RunResponse(
+            status=result["status"],
+            stdout=result["stdout"],
+            stderr=result["stderr"],
+            compile_output=result["compile_output"],
+            execution_time=result["time"],
+            memory_used=result["memory"],
+            passed_count=1 if result["passed"] else 0,
+            total_count=1,
+            test_results=[RunResult(
+                test_case_index=0,
+                input=req.custom_input,
+                stdout=result["stdout"],
+                stderr=result["stderr"],
+                compile_output=result["compile_output"],
+                status=result["status"],
+                passed=result["passed"],
+                execution_time=result["time"],
+                memory_used=result["memory"],
+            )],
+        )
+
+    # Get sample test cases
+    sample_cases = (await db.execute(
+        select(TestCase).where(
+            TestCase.problem_id == req.problem_id,
+            TestCase.is_sample == True,
+        ).order_by(TestCase.order_index)
+    )).scalars().all()
+
+    if not sample_cases:
+        # No sample cases — just run with problem's sample_input
+        stdin = problem.sample_input or ""
+        result = await judge_service.execute(
+            source_code=req.source_code,
+            language=req.language,
+            stdin=stdin,
+            expected_output=problem.sample_output,
+            time_limit=problem.time_limit_ms / 1000.0,
+            memory_limit=problem.memory_limit_kb,
+        )
+        return RunResponse(
+            status=result["status"],
+            stdout=result["stdout"],
+            stderr=result["stderr"],
+            compile_output=result["compile_output"],
+            execution_time=result["time"],
+            memory_used=result["memory"],
+            passed_count=1 if result["passed"] else 0,
+            total_count=1,
+            test_results=[RunResult(
+                test_case_index=0,
+                input=stdin,
+                expected_output=problem.sample_output,
+                stdout=result["stdout"],
+                stderr=result["stderr"],
+                compile_output=result["compile_output"],
+                status=result["status"],
+                passed=result["passed"],
+                execution_time=result["time"],
+                memory_used=result["memory"],
+            )],
+        )
+
+    # Run against each sample test case
+    test_results = []
+    overall_status = "accepted"
+    passed_count = 0
+    max_time = 0
+    max_memory = 0
+
+    for i, tc in enumerate(sample_cases):
+        result = await judge_service.execute(
+            source_code=req.source_code,
+            language=req.language,
+            stdin=tc.input,
+            expected_output=tc.expected_output,
+            time_limit=problem.time_limit_ms / 1000.0,
+            memory_limit=problem.memory_limit_kb,
+        )
+
+        if result["passed"]:
+            passed_count += 1
+        elif overall_status == "accepted":
+            overall_status = result["status"]
+
+        max_time = max(max_time, result["time"])
+        max_memory = max(max_memory, result["memory"])
+
+        # For compile errors, stop early
+        if result["status"] == "compile_error":
+            overall_status = "compile_error"
+            test_results.append(RunResult(
+                test_case_index=i,
+                input=tc.input,
+                expected_output=tc.expected_output,
+                stdout=result["stdout"],
+                stderr=result["stderr"],
+                compile_output=result["compile_output"],
+                status=result["status"],
+                passed=False,
+                execution_time=0,
+                memory_used=0,
+            ))
+            break
+
+        test_results.append(RunResult(
+            test_case_index=i,
+            input=tc.input,
+            expected_output=tc.expected_output,
+            stdout=result["stdout"],
+            stderr=result["stderr"],
+            compile_output=result["compile_output"],
+            status=result["status"],
+            passed=result["passed"],
+            execution_time=result["time"],
+            memory_used=result["memory"],
+        ))
+
+    return RunResponse(
+        status=overall_status,
+        stdout=test_results[0].stdout if test_results else "",
+        stderr=test_results[0].stderr if test_results else "",
+        compile_output=test_results[0].compile_output if test_results else "",
+        execution_time=max_time,
+        memory_used=max_memory,
+        passed_count=passed_count,
+        total_count=len(sample_cases),
+        test_results=test_results,
+    )
+
+
+# ── Submissions (full grading) ──────────────────────────────
 
 @router.post("/submissions", response_model=SubmissionResponse, status_code=201)
 async def create_submission(
@@ -137,7 +310,7 @@ async def create_submission(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Submit a solution for a problem."""
+    """Submit a solution for a problem (full grading)."""
     # Verify event access
     event = (await db.execute(select(Event).where(Event.id == req.event_id))).scalar_one_or_none()
     if not event or event.tenant_id != user.tenant_id:
@@ -168,15 +341,16 @@ async def create_submission(
 
     # Validate language
     problem = (await db.execute(select(Problem).where(Problem.id == req.problem_id))).scalar_one_or_none()
-    if req.language not in problem.allowed_languages:
+    if req.language not in (problem.allowed_languages or []):
         raise HTTPException(status_code=400, detail=f"Language '{req.language}' not allowed")
 
-    # Rate limit: max 1 submission per 30 seconds
+    # Rate limit: max 1 submission per 30 seconds (FIXED — was crashing)
+    cutoff = datetime.utcnow() - timedelta(seconds=30)
     recent = (await db.execute(
         select(Submission).where(
             Submission.user_id == user.id,
             Submission.problem_id == req.problem_id,
-            Submission.submitted_at > datetime.utcnow().replace(second=datetime.utcnow().second - 30),
+            Submission.submitted_at > cutoff,
         )
     )).scalar_one_or_none()
     if recent:
@@ -205,18 +379,18 @@ async def create_submission(
 
 
 async def process_submission(submission_id: str, problem_id: str):
-    """Background task: submit code to Judge0 and process results."""
+    """Background task: execute code and process results."""
     from app.database import async_session
 
     async with async_session() as db:
         try:
-            # Get submission and test cases
             sub = (await db.execute(
                 select(Submission).where(Submission.id == submission_id)
             )).scalar_one()
 
             test_cases = (await db.execute(
-                select(TestCase).where(TestCase.problem_id == problem_id).order_by(TestCase.order_index)
+                select(TestCase).where(TestCase.problem_id == problem_id)
+                .order_by(TestCase.order_index)
             )).scalars().all()
 
             if not test_cases:
@@ -226,23 +400,19 @@ async def process_submission(submission_id: str, problem_id: str):
                 await db.commit()
                 return
 
-            # Get problem limits
             problem = (await db.execute(
                 select(Problem).where(Problem.id == problem_id)
             )).scalar_one()
 
-            # Submit each test case to Judge0
             total_weight = sum(tc.weight for tc in test_cases)
             total_score = 0
             max_time = 0
             max_memory = 0
-            all_passed = True
             final_status = "accepted"
 
             for tc in test_cases:
                 try:
-                    # Submit to Judge0
-                    result = await judge_service.submit(
+                    result = await judge_service.execute(
                         source_code=sub.source_code,
                         language=sub.language,
                         stdin=tc.input,
@@ -251,32 +421,13 @@ async def process_submission(submission_id: str, problem_id: str):
                         memory_limit=problem.memory_limit_kb,
                     )
 
-                    token = result.get("token")
-                    if not token:
-                        continue
+                    tc_passed = result["passed"]
+                    tc_status = result["status"]
+                    tc_time = result["time"]
+                    tc_memory = result["memory"]
 
-                    # Poll for result (max 30 seconds)
-                    judge_result = None
-                    for _ in range(15):
-                        await asyncio.sleep(2)
-                        judge_result = await judge_service.get_result(token)
-                        status_id = judge_result.get("status", {}).get("id", 0)
-                        if status_id >= 3:  # Finished
-                            break
-
-                    if not judge_result:
-                        continue
-
-                    status_id = judge_result.get("status", {}).get("id", 0)
-                    tc_status = judge_service.parse_status(status_id)
-                    tc_passed = status_id == 3  # Accepted
-                    tc_time = int(float(judge_result.get("time", 0) or 0) * 1000)
-                    tc_memory = int(float(judge_result.get("memory", 0) or 0))
-
-                    if not tc_passed:
-                        all_passed = False
-                        if final_status == "accepted":
-                            final_status = tc_status
+                    if not tc_passed and final_status == "accepted":
+                        final_status = tc_status
 
                     max_time = max(max_time, tc_time)
                     max_memory = max(max_memory, tc_memory)
@@ -284,20 +435,33 @@ async def process_submission(submission_id: str, problem_id: str):
                     if tc_passed:
                         total_score += (tc.weight / total_weight) * 100
 
-                    # Save test case result
+                    # Build combined output for actual_output field
+                    # Store stderr and compile_output as JSON in actual_output
+                    output_data = result["stdout"]
+                    if result["stderr"] or result["compile_output"]:
+                        output_data = json.dumps({
+                            "stdout": result["stdout"],
+                            "stderr": result["stderr"],
+                            "compile_output": result["compile_output"],
+                        })
+
                     result_entry = SubmissionResult(
                         submission_id=sub.id,
                         test_case_id=tc.id,
                         status=tc_status,
-                        actual_output=judge_result.get("stdout", ""),
+                        actual_output=output_data,
                         execution_time=tc_time,
                         memory_used=tc_memory,
                         passed=tc_passed,
                     )
                     db.add(result_entry)
 
+                    # Stop early on compile error (same code for all cases)
+                    if tc_status == "compile_error":
+                        final_status = "compile_error"
+                        break
+
                 except Exception as e:
-                    # Log error but continue with other test cases
                     result_entry = SubmissionResult(
                         submission_id=sub.id,
                         test_case_id=tc.id,
@@ -306,25 +470,20 @@ async def process_submission(submission_id: str, problem_id: str):
                         passed=False,
                     )
                     db.add(result_entry)
-                    all_passed = False
                     if final_status == "accepted":
                         final_status = "runtime_error"
 
-            # Update submission
             sub.status = final_status
             sub.score = round(total_score, 2)
             sub.execution_time = max_time
             sub.memory_used = max_memory
             sub.judged_at = datetime.utcnow()
 
-            # Update leaderboard
             await update_leaderboard(db, sub)
-
             await db.commit()
 
         except Exception as e:
             await db.rollback()
-            # Mark submission as error
             async with async_session() as error_db:
                 sub = (await error_db.execute(
                     select(Submission).where(Submission.id == submission_id)
@@ -338,7 +497,6 @@ async def update_leaderboard(db: AsyncSession, submission: Submission):
     """Update leaderboard entry after a submission is judged."""
     participant_id = submission.team_id or submission.user_id
 
-    # Get or create leaderboard entry
     entry = (await db.execute(
         select(LeaderboardEntry).where(
             LeaderboardEntry.event_id == submission.event_id,
@@ -355,7 +513,6 @@ async def update_leaderboard(db: AsyncSession, submission: Submission):
         )
         db.add(entry)
 
-    # Recalculate: best score per problem
     all_subs = (await db.execute(
         select(Submission).where(
             Submission.event_id == submission.event_id,
@@ -366,7 +523,6 @@ async def update_leaderboard(db: AsyncSession, submission: Submission):
         )
     )).scalars().all()
 
-    # Group by problem, take best score
     best_scores = {}
     for s in all_subs:
         pid = str(s.problem_id)
@@ -378,6 +534,8 @@ async def update_leaderboard(db: AsyncSession, submission: Submission):
     entry.last_submission = submission.submitted_at
 
 
+# ── Get Submission Details (FIXED — no lazy loading) ─────────
+
 @router.get("/submissions/{submission_id}", response_model=SubmissionDetailResponse)
 async def get_submission(
     submission_id: UUID,
@@ -385,25 +543,63 @@ async def get_submission(
     db: AsyncSession = Depends(get_db),
 ):
     """Get submission details with test case results."""
+    # FIXED: use selectinload to eagerly load results — prevents MissingGreenlet
     sub = (await db.execute(
-        select(Submission).where(Submission.id == submission_id)
+        select(Submission)
+        .options(selectinload(Submission.results))
+        .where(Submission.id == submission_id)
     )).scalar_one_or_none()
 
     if not sub:
         raise HTTPException(status_code=404, detail="Submission not found")
 
-    # Only owners, faculty, or admin can view
     if user.role == "student" and sub.user_id != user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    # Get results
-    results = (await db.execute(
-        select(SubmissionResult).where(SubmissionResult.submission_id == submission_id)
-    )).scalars().all()
+    # Build response manually to avoid pydantic lazy-load issues
+    result_list = []
+    for r in sub.results:
+        # Parse combined output (may be JSON with stderr/compile_output)
+        stderr = None
+        compile_output = None
+        actual_output = r.actual_output
 
-    response = SubmissionDetailResponse.model_validate(sub)
-    response.results = [SubmissionResultResponse.model_validate(r) for r in results]
-    return response
+        if actual_output and actual_output.startswith("{"):
+            try:
+                parsed = json.loads(actual_output)
+                actual_output = parsed.get("stdout", "")
+                stderr = parsed.get("stderr", "")
+                compile_output = parsed.get("compile_output", "")
+            except json.JSONDecodeError:
+                pass
+
+        result_list.append(SubmissionResultResponse(
+            id=r.id,
+            test_case_id=r.test_case_id,
+            status=r.status,
+            actual_output=actual_output,
+            stderr=stderr,
+            compile_output=compile_output,
+            execution_time=r.execution_time,
+            memory_used=r.memory_used,
+            passed=r.passed,
+        ))
+
+    return SubmissionDetailResponse(
+        id=sub.id,
+        event_id=sub.event_id,
+        problem_id=sub.problem_id,
+        user_id=sub.user_id,
+        language=sub.language,
+        source_code=sub.source_code,
+        status=sub.status,
+        score=float(sub.score) if sub.score else None,
+        execution_time=sub.execution_time,
+        memory_used=sub.memory_used,
+        submitted_at=sub.submitted_at,
+        judged_at=sub.judged_at,
+        results=result_list,
+    )
 
 
 @router.get("/events/{event_id}/my-submissions", response_model=list[SubmissionResponse])
@@ -451,7 +647,6 @@ async def get_leaderboard(
         query.offset((page - 1) * page_size).limit(page_size)
     )).scalars().all()
 
-    # Enrich with user/team names
     result = []
     for i, entry in enumerate(entries):
         user_name = None
