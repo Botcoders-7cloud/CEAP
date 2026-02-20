@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
 import { Sidebar } from "@/components/sidebar";
+import { startKeepAlive, stopKeepAlive } from "@/lib/keep_alive";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { isAuthenticated, isLoading } = useAuthStore();
@@ -15,6 +16,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     useEffect(() => {
         if (!isLoading && !isAuthenticated) router.push("/login");
     }, [isLoading, isAuthenticated, router]);
+
+    // Keep Render backend warm while user is logged in
+    useEffect(() => {
+        if (isAuthenticated) {
+            startKeepAlive();
+            return () => stopKeepAlive();
+        }
+    }, [isAuthenticated]);
 
     if (isLoading) {
         return (

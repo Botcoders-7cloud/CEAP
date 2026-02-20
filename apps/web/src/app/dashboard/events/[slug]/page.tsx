@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { eventAPI, submissionAPI, problemAPI } from "@/lib/api";
+import { eventAPI, submissionAPI, problemAPI, certificateAPI } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import Link from "next/link";
 import {
@@ -25,6 +25,7 @@ import {
     Trash2,
     Play,
     X,
+    Award,
 } from "lucide-react";
 
 export default function EventDetailPage() {
@@ -97,6 +98,13 @@ export default function EventDetailPage() {
     const unlinkProblemMutation = useMutation({
         mutationFn: (problemId: string) => eventAPI.unlinkProblem(event!.id, problemId),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ["event-problems", event!.id] }),
+    });
+
+    const generateCertsMutation = useMutation({
+        mutationFn: () => certificateAPI.generateForEvent(event!.id),
+        onSuccess: (res) => {
+            queryClient.invalidateQueries({ queryKey: ["my-certificates"] });
+        },
     });
 
     if (isLoading) {
@@ -194,6 +202,14 @@ export default function EventDetailPage() {
                                 <Code2 size={14} /> Arena
                             </Link>
                         )}
+                        {isAdmin && ["ongoing", "completed"].includes(event.status) && (
+                            <button onClick={() => generateCertsMutation.mutate()} disabled={generateCertsMutation.isPending}
+                                className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl font-semibold transition-all"
+                                style={{ background: "rgba(16,185,129,0.12)", color: "#10b981" }}>
+                                {generateCertsMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Award size={14} />}
+                                🎓 Generate Certificates
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -212,6 +228,18 @@ export default function EventDetailPage() {
                     <div className="mt-3 p-3 rounded-lg flex items-center gap-2 text-xs" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
                         <AlertTriangle size={12} />
                         {(registerMutation.error as any)?.response?.data?.detail || (publishMutation.error as any)?.response?.data?.detail || "Action failed"}
+                    </div>
+                )}
+                {generateCertsMutation.isSuccess && (
+                    <div className="mt-3 p-3 rounded-lg flex items-center gap-2 text-xs" style={{ background: "rgba(16,185,129,0.1)", color: "#10b981" }}>
+                        <CheckCircle size={12} />
+                        🎓 Certificates generated! Created: {(generateCertsMutation.data as any)?.data?.created}, Already existed: {(generateCertsMutation.data as any)?.data?.already_existed}
+                    </div>
+                )}
+                {generateCertsMutation.isError && (
+                    <div className="mt-3 p-3 rounded-lg flex items-center gap-2 text-xs" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
+                        <AlertTriangle size={12} />
+                        {(generateCertsMutation.error as any)?.response?.data?.detail || "Failed to generate certificates"}
                     </div>
                 )}
             </div>
