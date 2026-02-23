@@ -86,29 +86,43 @@ async def init_db():
 async def _apply_column_migrations():
     """
     Safely add missing columns to existing tables.
-    Each ALTER is idempotent — if column exists, the error is caught silently.
+    Uses information_schema to check existence before ALTER.
     """
     migrations = [
-        # Phase 1: password reset fields
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(64)",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMP",
-        # Phase 2: must change password
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false",
+        ("users", "password_reset_token", "VARCHAR(64)", None),
+        ("users", "password_reset_expires", "TIMESTAMP", None),
+        ("users", "must_change_password", "BOOLEAN", "false"),
     ]
 
-    # SQLite uses a different syntax and doesn't support IF NOT EXISTS
+    # SQLite uses a different syntax
     if settings.is_sqlite:
         print("ℹ️  SQLite: skipping ALTER TABLE migrations (handled by create_all)")
         return
 
     try:
         async with engine.begin() as conn:
-            for sql in migrations:
-                try:
-                    await conn.execute(sa.text(sql))
-                except Exception:
-                    pass  # Column likely already exists
-        print("✅ Column migrations applied")
+            for table, column, col_type, default in migrations:
+                # Check if column exists
+                check_sql = sa.text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = :table AND column_name = :column"
+                )
+                result = await conn.execute(check_sql, {"table": table, "column": column})
+                exists = result.fetchone()
+
+                if exists:
+                    print(f"  ✓ {table}.{column} already exists")
+                else:
+                    default_clause = f" DEFAULT {default}" if default else ""
+                    alter_sql = sa.text(
+                        f"ALTER TABLE {table} ADD COLUMN {column} {col_type}{default_clause}"
+                    )
+                    await conn.execute(alter_sql)
+                    print(f"  ✅ Added {table}.{column} ({col_type})")
+
+        print("✅ Column migrations complete")
     except Exception as e:
-        print(f"⚠️  Column migration warning: {e}")
+        print(f"⚠️  Column migration error: {e}")
+        import traceback
+        traceback.print_exc()
 
