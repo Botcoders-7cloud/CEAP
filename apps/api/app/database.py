@@ -69,18 +69,21 @@ async def get_db():
 
 
 async def init_db():
-    """Create all tables and add missing columns. Gracefully handles failures."""
+    """Create all tables and add missing columns. Each step runs independently."""
+    # Step 1: Create missing tables
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         print("✅ Database tables created/verified")
-
-        # Add missing columns to existing tables (create_all can't ALTER)
-        await _apply_column_migrations()
-
     except Exception as e:
         print(f"⚠️  Database init warning: {e}")
         print("   Tables may need to be created manually or the DB may be temporarily unavailable.")
+
+    # Step 2: Add missing columns (runs even if create_all failed)
+    try:
+        await _apply_column_migrations()
+    except Exception as e:
+        print(f"⚠️  Column migration failed: {e}")
 
 
 async def _apply_column_migrations():
