@@ -197,7 +197,12 @@ export default function EventDetailPage() {
                                 Register
                             </button>
                         )}
-                        {event.status === "ongoing" && (
+                        {event.status === "ongoing" && event.event_type === "mcq_exam" && (
+                            <Link href={`/dashboard/exam/${event.id}`} className="btn-primary flex items-center gap-2 text-sm">
+                                <Play size={14} /> Take Exam
+                            </Link>
+                        )}
+                        {event.status === "ongoing" && event.event_type !== "mcq_exam" && (
                             <Link href="/dashboard/arena" className="btn-secondary flex items-center gap-2 text-sm">
                                 <Code2 size={14} /> Arena
                             </Link>

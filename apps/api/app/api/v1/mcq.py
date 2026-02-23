@@ -331,7 +331,7 @@ async def start_exam(
         event_id=str(event_id),
         total_questions=q_count,
         max_score=float(max_score),
-        time_limit_minutes=event.time_limit if hasattr(event, "time_limit") else None,
+        time_limit_minutes=getattr(event, "time_limit", None),
     )
     db.add(attempt)
     await db.flush()
@@ -340,6 +340,7 @@ async def start_exam(
         "attempt_id": attempt.id,
         "total_questions": q_count,
         "max_score": float(max_score),
+        "time_limit_minutes": attempt.time_limit_minutes,
         "started_at": attempt.started_at.isoformat(),
         "message": "Exam started. Good luck!",
     }
