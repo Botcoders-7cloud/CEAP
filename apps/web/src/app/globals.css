@@ -61,6 +61,59 @@
   --radius-xl: 18px;
 }
 
+/* ── Light Mode ───────────────────────────────────── */
+[data-theme="light"] {
+  --primary: #A67548;
+  --primary-hover: #8D6340;
+  --primary-light: #C8956C;
+  --primary-dark: #7A5635;
+  --accent: #A67548;
+  --accent-light: #C8956C;
+
+  --success: #3D7A4C;
+  --warning: #B87D4A;
+  --danger: #B05050;
+
+  --bg-dark: #FAF8F6;
+  --bg-elevated: #F5F2EF;
+  --surface-1: #FFFFFF;
+  --surface-2: #F0EDE8;
+  --surface-3: #E8E4DF;
+
+  --border: rgba(30, 25, 20, 0.1);
+  --border-hover: rgba(30, 25, 20, 0.18);
+  --border-focus: rgba(166, 117, 72, 0.5);
+
+  --text-primary: #1A1918;
+  --text-secondary: #5C5650;
+  --text-muted: #9A938C;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.1);
+
+  --bg-card: var(--surface-1);
+  --bg-card-hover: var(--surface-2);
+  --border-color: var(--border);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: var(--border);
+}
+
+/* Smooth theme transition */
+body,
+.card,
+.glass-card,
+.btn-primary,
+.btn-secondary,
+.input-field {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+/* Light mode button text stays dark */
+[data-theme="light"] .btn-primary {
+  color: #FFFFFF;
+}
+
 /* ── Base ──────────────────────────────────────────── */
 * {
   box-sizing: border-box;
@@ -358,6 +411,134 @@ body {
 :focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+
+/* ── Skeleton Loader ──────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg,
+      var(--surface-2) 0%,
+      var(--surface-3) 40%,
+      var(--surface-2) 80%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite ease-in-out;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ── Toast Notifications ──────────────────────────── */
+.toast-enter {
+  animation: toast-in 0.3s ease-out forwards;
+}
+
+.toast-exit {
+  animation: toast-out 0.2s ease-in forwards;
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(20px) scale(0.95);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes toast-out {
+  from {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateY(-10px) scale(0.95);
+    opacity: 0;
+  }
+}
+
+/* ── Mobile Responsive ────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Hide sidebar on mobile by default */
+  aside.fixed {
+    transform: translateX(-100%);
+  }
+
+  aside.fixed.mobile-open {
+    transform: translateX(0);
+    z-index: 50;
+  }
+
+  /* Full-width content on mobile */
+  main {
+    margin-left: 0 !important;
+    padding: 16px !important;
+  }
+
+  /* Mobile hamburger overlay */
+  .mobile-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 45;
+    backdrop-filter: blur(2px);
+  }
+
+  /* Stack grids on mobile */
+  .grid-cols-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .grid-cols-3 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .grid-cols-4 {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .sm\\:grid-cols-3 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .sm\\:grid-cols-4 {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+/* Mobile menu button (visible only on small screens) */
+.mobile-menu-btn {
+  display: none;
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 55;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .mobile-menu-btn {
+    display: flex;
+  }
 }
 
 ::selection {

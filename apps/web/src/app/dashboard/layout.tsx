@@ -1,39 +1,40 @@
 "use client";
 /**
  * CEAP — Dashboard Layout
- * Wraps all dashboard pages with sidebar. Handles collapsed state.
- * Forces password change on first login.
+ * Sidebar + mobile hamburger menu + force-password-change.
  */
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
 import { Sidebar } from "@/components/sidebar";
 import { startKeepAlive, stopKeepAlive } from "@/lib/keep_alive";
-import { Shield } from "lucide-react";
+import { Shield, Menu, X } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { isAuthenticated, isLoading, mustChangePassword } = useAuthStore();
     const router = useRouter();
     const pathname = usePathname();
+    const [mobileOpen, setMobileOpen] = useState(false);
 
     useEffect(() => {
         if (!isLoading && !isAuthenticated) router.push("/login");
     }, [isLoading, isAuthenticated, router]);
 
-    // Force password change redirect
     useEffect(() => {
         if (mustChangePassword && pathname !== "/dashboard/settings") {
             router.push("/dashboard/settings");
         }
     }, [mustChangePassword, pathname, router]);
 
-    // Keep Render backend warm while user is logged in
     useEffect(() => {
         if (isAuthenticated) {
             startKeepAlive();
             return () => stopKeepAlive();
         }
     }, [isAuthenticated]);
+
+    // Close mobile sidebar on navigation
+    useEffect(() => { setMobileOpen(false); }, [pathname]);
 
     if (isLoading) {
         return (
@@ -51,8 +52,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     return (
         <div className="h-screen flex overflow-hidden">
-            <Sidebar />
-            <main className="flex-1 ml-[250px] overflow-y-auto mesh-gradient-2" style={{ background: "var(--bg-dark)" }}>
+            {/* Mobile hamburger */}
+            <button className="mobile-menu-btn" onClick={() => setMobileOpen(!mobileOpen)}>
+                {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
+
+            {/* Mobile overlay */}
+            {mobileOpen && <div className="mobile-overlay" onClick={() => setMobileOpen(false)} />}
+
+            {/* Sidebar wrapper — mobile-open class slides it in */}
+            <div className={mobileOpen ? "mobile-open" : ""} style={{ display: "contents" }}>
+                <Sidebar />
+            </div>
+
+            <main className="flex-1 ml-[250px] overflow-y-auto" style={{ background: "var(--bg-dark)" }}>
                 <div className="p-6 lg:p-8 max-w-[1400px]">
                     {mustChangePassword && (
                         <div className="mb-6 p-4 rounded-xl flex items-center gap-3"
@@ -74,4 +87,3 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
     );
 }
-

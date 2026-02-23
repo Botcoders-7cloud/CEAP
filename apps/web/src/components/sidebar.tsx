@@ -9,9 +9,10 @@ import { useAuthStore } from "@/store/auth";
 import {
     LayoutDashboard, Calendar, Code2, Trophy, Award, Settings,
     Users, BookOpen, LogOut, ChevronLeft, Menu, BarChart3,
-    UserCircle, FileText,
+    UserCircle, FileText, Sun, Moon,
 } from "lucide-react";
 import { useState } from "react";
+import { useTheme } from "@/hooks/useTheme";
 
 const STUDENT_NAV = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -38,6 +39,7 @@ export function Sidebar() {
     const pathname = usePathname();
     const { user, logout } = useAuthStore();
     const [collapsed, setCollapsed] = useState(false);
+    const { theme, toggle: toggleTheme, isDark } = useTheme();
 
     const navItems =
         user?.role === "admin" || user?.role === "super_admin" || user?.role === "faculty"
@@ -159,6 +161,22 @@ export function Sidebar() {
                 >
                     <LogOut size={16} />
                     {!collapsed && <span>Log out</span>}
+                </button>
+                <button
+                    onClick={toggleTheme}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg w-full text-[13px] font-medium transition-all mt-1 ${collapsed ? "justify-center" : ""}`}
+                    style={{ color: "var(--text-muted)" }}
+                    onMouseEnter={e => {
+                        e.currentTarget.style.color = isDark ? "#f59e0b" : "#6366f1";
+                        e.currentTarget.style.background = isDark ? "rgba(245,158,11,0.06)" : "rgba(99,102,241,0.06)";
+                    }}
+                    onMouseLeave={e => {
+                        e.currentTarget.style.color = "var(--text-muted)";
+                        e.currentTarget.style.background = "transparent";
+                    }}
+                >
+                    {isDark ? <Sun size={16} /> : <Moon size={16} />}
+                    {!collapsed && <span>{isDark ? "Light Mode" : "Dark Mode"}</span>}
                 </button>
             </div>
         </aside>
