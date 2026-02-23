@@ -16,8 +16,10 @@ const STUDENT_NAV = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { label: "Events", href: "/dashboard/events", icon: Calendar },
     { label: "Coding Arena", href: "/dashboard/arena", icon: Code2 },
+    { label: "Exams", href: "/dashboard/events?type=mcq_exam", icon: BookOpen },
     { label: "Leaderboard", href: "/dashboard/leaderboard", icon: Trophy },
     { label: "Certificates", href: "/dashboard/certificates", icon: Award },
+    { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
 const ADMIN_NAV = [

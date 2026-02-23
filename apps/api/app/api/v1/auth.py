@@ -24,6 +24,7 @@ from app.core.security import (
     create_refresh_token, decode_token, get_current_user
 )
 from app.core.limiter import limiter
+from app.services.audit import log_action
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -75,6 +76,9 @@ async def login(request: Request, req: LoginRequest, db: AsyncSession = Depends(
         refresh_token=refresh_token,
         user=UserResponse.model_validate(user),
     )
+
+    # Audit log
+    await log_action(db, user_id=str(user.id), tenant_id=str(user.tenant_id), action="user.login", entity_type="user", entity_id=str(user.id))
 
     # Add must_change_password flag to response if needed
     result_dict = response.model_dump()
