@@ -132,6 +132,13 @@ export const mcqAPI = {
 // ── Analytics APIs ───────────────────────────
 export const analyticsAPI = {
     dashboard: () => api.get("/analytics/dashboard"),
+    myStats: () => api.get("/analytics/my-stats"),
+    exportLeaderboard: (eventId: string) =>
+        api.get(`/analytics/export/leaderboard/${eventId}`, { responseType: "blob" }),
+    exportParticipants: (eventId: string) =>
+        api.get(`/analytics/export/participants/${eventId}`, { responseType: "blob" }),
+    exportMCQResults: (eventId: string) =>
+        api.get(`/analytics/export/mcq-results/${eventId}`, { responseType: "blob" }),
 };
 
 // ── Event APIs ───────────────────────────────
