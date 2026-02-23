@@ -44,9 +44,25 @@ export default function SettingsPage() {
         max_students: 1000,
     });
 
-    const handleSave = () => {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
+    const [profileLoading, setProfileLoading] = useState(false);
+    const [profileMsg, setProfileMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+    const handleSave = async () => {
+        setProfileLoading(true);
+        setProfileMsg(null);
+        try {
+            await authAPI.updateProfile({
+                full_name: profile.full_name,
+                department: profile.department,
+            });
+            setProfileMsg({ type: "success", text: "Profile updated successfully" });
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
+        } catch (err: any) {
+            setProfileMsg({ type: "error", text: err.response?.data?.detail || "Failed to update profile" });
+        } finally {
+            setProfileLoading(false);
+        }
     };
 
     const handleChangePassword = async (e: React.FormEvent) => {
@@ -205,12 +221,23 @@ export default function SettingsPage() {
             </div>
 
             {/* Save Button */}
-            <div className="flex items-center gap-3">
-                <button onClick={handleSave} className="btn-primary flex items-center gap-2 text-sm px-6">
-                    {saved ? <CheckCircle size={16} /> : <Save size={16} />}
-                    {saved ? "Saved!" : "Save Changes"}
-                </button>
-                {saved && <span className="text-xs" style={{ color: "var(--success)" }}>Changes saved successfully</span>}
+            <div className="space-y-2">
+                {profileMsg && (
+                    <div className="text-xs px-3 py-2 rounded-lg" style={{
+                        background: profileMsg.type === "success" ? "rgba(107,158,120,0.08)" : "rgba(201,112,112,0.08)",
+                        border: `1px solid ${profileMsg.type === "success" ? "rgba(107,158,120,0.15)" : "rgba(201,112,112,0.15)"}`,
+                        color: profileMsg.type === "success" ? "#6B9E78" : "#C97070",
+                    }}>
+                        {profileMsg.text}
+                    </div>
+                )}
+                <div className="flex items-center gap-3">
+                    <button onClick={handleSave} disabled={profileLoading} className="btn-primary flex items-center gap-2 text-sm px-6"
+                        style={{ opacity: profileLoading ? 0.7 : 1 }}>
+                        {saved ? <CheckCircle size={16} /> : <Save size={16} />}
+                        {profileLoading ? "Saving..." : saved ? "Saved!" : "Save Changes"}
+                    </button>
+                </div>
             </div>
         </div>
     );
