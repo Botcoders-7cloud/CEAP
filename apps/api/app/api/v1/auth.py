@@ -1,18 +1,21 @@
 """
 CEAP API — Auth Routes
-Handles registration, login, token refresh, user profile,
-forgot-password, and reset-password — with rate limiting.
+Login, token refresh, user profile, password management.
+Students login with CSV-imported credentials.
+Faculty can join via faculty_key (creates pending account).
 """
+import re
 import secrets
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database import get_db
-from app.models.tenant import Tenant, User, StudentWhitelist
+from app.models.tenant import Tenant, User
 from app.schemas.auth import (
-    RegisterRequest, LoginRequest, TokenResponse, UserResponse,
+    LoginRequest, TokenResponse, UserResponse,
     RefreshTokenRequest, UpdateProfileRequest,
     ForgotPasswordRequest, ResetPasswordRequest,
 )
@@ -25,113 +28,15 @@ from app.core.limiter import limiter
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-# ── Register ──────────────────────────────────────────────────
-@router.post("/register", response_model=TokenResponse, status_code=201)
-@limiter.limit("3/minute")
-async def register(request: Request, req: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    """Register a new user under a tenant."""
-    # Find tenant
-    result = await db.execute(select(Tenant).where(Tenant.slug == req.tenant_slug))
-    tenant = result.scalar_one_or_none()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Organization not found")
-    if not tenant.is_active:
-        raise HTTPException(status_code=403, detail="Organization is inactive")
-
-    # ── Role-specific validation ────────────────────────────
-    if req.role == "student":
-        # Validate join code
-        if tenant.join_code and req.join_code != tenant.join_code:
-            raise HTTPException(status_code=403, detail="Invalid join code")
-
-        # Validate roll number against whitelist (only if whitelist has entries)
-        if req.roll_number:
-            wl_result = await db.execute(
-                select(StudentWhitelist).where(
-                    StudentWhitelist.tenant_id == tenant.id,
-                    StudentWhitelist.roll_number == req.roll_number.strip().upper()
-                )
-            )
-            wl_entry = wl_result.scalar_one_or_none()
-            count_result = await db.execute(
-                select(StudentWhitelist).where(StudentWhitelist.tenant_id == tenant.id)
-            )
-            has_whitelist = len(count_result.scalars().all()) > 0
-            if has_whitelist and not wl_entry:
-                raise HTTPException(status_code=403, detail="Roll number not found in student list")
-            if wl_entry and wl_entry.is_registered:
-                raise HTTPException(status_code=409, detail="This roll number is already registered")
-        user_status = "active"
-
-    elif req.role == "faculty":
-        if not req.faculty_key:
-            raise HTTPException(status_code=400, detail="Faculty key is required for faculty registration")
-        if tenant.faculty_key and req.faculty_key != tenant.faculty_key:
-            raise HTTPException(status_code=403, detail="Invalid faculty key")
-        user_status = "pending"
-
-    # Check duplicate email within tenant
-    existing = await db.execute(
-        select(User).where(User.tenant_id == tenant.id, User.email == req.email)
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Email already registered")
-
-    # Check student limit
-    if req.role == "student":
-        user_count_result = await db.execute(
-            select(User).where(User.tenant_id == tenant.id, User.role == "student")
-        )
-        if len(user_count_result.scalars().all()) >= tenant.max_students:
-            raise HTTPException(status_code=403, detail="Student limit reached for this organization")
-
-    # Create user
-    roll = req.roll_number.strip().upper() if req.roll_number else None
-    user = User(
-        tenant_id=tenant.id,
-        email=req.email,
-        password_hash=hash_password(req.password),
-        full_name=req.full_name,
-        role=req.role,
-        status=user_status,
-        roll_number=roll,
-        department=req.department,
-        college_id=req.college_id,
-    )
-    db.add(user)
-    await db.flush()
-
-    # Mark roll number as registered
-    if req.role == "student" and roll:
-        wl_update = await db.execute(
-            select(StudentWhitelist).where(
-                StudentWhitelist.tenant_id == tenant.id,
-                StudentWhitelist.roll_number == roll
-            )
-        )
-        wl_entry = wl_update.scalar_one_or_none()
-        if wl_entry:
-            wl_entry.is_registered = True
-
-    await db.refresh(user)
-
-    # Generate tokens
-    token_data = {"sub": str(user.id), "tenant_id": str(tenant.id), "role": user.role}
-    access_token = create_access_token(token_data)
-    refresh_token = create_refresh_token(token_data)
-
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        user=UserResponse.model_validate(user),
-    )
-
-
 # ── Login ─────────────────────────────────────────────────────
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
 async def login(request: Request, req: LoginRequest, db: AsyncSession = Depends(get_db)):
-    """Login with email and password."""
+    """
+    Login with email and password.
+    Students: use credentials from CSV import.
+    Faculty: if account doesn't exist but faculty_key is valid, creates a pending account.
+    """
     result = await db.execute(select(Tenant).where(Tenant.slug == req.tenant_slug))
     tenant = result.scalar_one_or_none()
     if not tenant:
@@ -158,15 +63,88 @@ async def login(request: Request, req: LoginRequest, db: AsyncSession = Depends(
 
     user.last_login = datetime.utcnow()
 
+    # Check if user needs to change password on first login
+    must_change = getattr(user, "must_change_password", False)
+
     token_data = {"sub": str(user.id), "tenant_id": str(user.tenant_id), "role": user.role}
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
 
-    return TokenResponse(
+    response = TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         user=UserResponse.model_validate(user),
     )
+
+    # Add must_change_password flag to response if needed
+    result_dict = response.model_dump()
+    if must_change:
+        result_dict["must_change_password"] = True
+
+    return result_dict
+
+
+# ── Faculty Join ──────────────────────────────────────────────
+class FacultyJoinRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=128)
+    full_name: str = Field(..., min_length=2, max_length=100)
+    faculty_key: str
+    tenant_slug: str = Field(..., min_length=2, max_length=50)
+    department: str | None = None
+
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must contain at least one digit")
+        return v
+
+
+@router.post("/faculty-join", status_code=201)
+@limiter.limit("3/minute")
+async def faculty_join(request: Request, req: FacultyJoinRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Faculty joins the platform with a faculty key.
+    Creates a pending account — admin must approve before login works.
+    """
+    result = await db.execute(select(Tenant).where(Tenant.slug == req.tenant_slug))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    if not tenant.is_active:
+        raise HTTPException(status_code=403, detail="Organization is inactive")
+
+    # Validate faculty key
+    if not tenant.faculty_key or req.faculty_key != tenant.faculty_key:
+        raise HTTPException(status_code=403, detail="Invalid faculty key")
+
+    # Check if already exists
+    existing = await db.execute(
+        select(User).where(User.tenant_id == tenant.id, User.email == req.email)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Email already registered. Please login instead.")
+
+    user = User(
+        tenant_id=tenant.id,
+        email=req.email,
+        password_hash=hash_password(req.password),
+        full_name=req.full_name,
+        role="faculty",
+        status="pending",
+        department=req.department,
+    )
+    db.add(user)
+    await db.flush()
+    await db.refresh(user)
+
+    return {
+        "message": "Faculty account created. Pending admin approval.",
+        "user": UserResponse.model_validate(user).model_dump(),
+    }
 
 
 # ── Token Refresh ─────────────────────────────────────────────
@@ -213,10 +191,6 @@ async def update_me(
 
 
 # ── Change Password ──────────────────────────────────────────
-from pydantic import BaseModel, Field, field_validator
-import re
-
-
 class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str = Field(..., min_length=8, max_length=128)
@@ -243,6 +217,9 @@ async def change_password(
     if not verify_password(req.old_password, user.password_hash):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     user.password_hash = hash_password(req.new_password)
+    # Clear must_change_password flag if set
+    if hasattr(user, "must_change_password"):
+        user.must_change_password = False
     await db.flush()
     return {"message": "Password changed successfully"}
 
@@ -267,13 +244,11 @@ async def forgot_password(
     user = result.scalar_one_or_none()
 
     if user:
-        # Generate a secure reset token
         token = secrets.token_urlsafe(32)
         user.password_reset_token = token
         user.password_reset_expires = datetime.utcnow() + timedelta(hours=1)
         await db.flush()
 
-        # Send email (best-effort — log in dev, send in prod)
         try:
             from app.services.email_service import send_password_reset
             await send_password_reset(user.email, user.full_name, token)
@@ -281,7 +256,6 @@ async def forgot_password(
             print(f"⚠️ Email send failed (non-fatal): {e}")
             print(f"🔑 Reset token for {user.email}: {token}")
 
-    # Always 200 to prevent email enumeration
     return {"message": "If an account exists with that email, a reset link has been sent."}
 
 

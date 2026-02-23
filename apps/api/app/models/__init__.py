@@ -9,6 +9,7 @@ from app.models.problem import (
     Submission, SubmissionResult, JudgeScore, Rubric
 )
 from app.models.leaderboard import LeaderboardEntry, Certificate, CertificateTemplate
+from app.models.mcq import MCQQuestion, MCQAttempt
 
 __all__ = [
     "Tenant", "User", "AuditLog", "StudentWhitelist",
@@ -16,4 +17,6 @@ __all__ = [
     "Problem", "TestCase", "StarterCode", "EventProblem",
     "Submission", "SubmissionResult", "JudgeScore", "Rubric",
     "LeaderboardEntry", "Certificate", "CertificateTemplate",
+    "MCQQuestion", "MCQAttempt",
 ]
+

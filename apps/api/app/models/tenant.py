@@ -57,6 +57,7 @@ class User(Base):
     last_login = Column(DateTime, nullable=True)
     password_reset_token = Column(String(64), nullable=True)
     password_reset_expires = Column(DateTime, nullable=True)
+    must_change_password = Column(Boolean, default=False)  # force change on first login
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

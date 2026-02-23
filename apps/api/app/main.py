@@ -1,6 +1,6 @@
 """
 CEAP FastAPI Application Entry Point
-Includes rate limiting, security headers, and CORS.
+Includes rate limiting, security headers, error handling, and CORS.
 """
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,27 +12,41 @@ from app.config import settings
 from app.api.v1 import router as api_router
 from app.database import init_db
 from app.core.limiter import limiter
+from app.core.error_handler import ErrorHandlerMiddleware
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown logic."""
+    import asyncio
+    from app.services.scheduler import run_scheduler
+
     print(f"🚀 CEAP API starting in {settings.APP_ENV} mode")
     print(f"📦 Database: {'SQLite' if settings.is_sqlite else 'PostgreSQL'}")
     await init_db()
     print("✅ Database tables ready")
+
+    # Start event scheduler as background task
+    scheduler_task = asyncio.create_task(run_scheduler())
+
     yield
+
+    # Cancel scheduler on shutdown
+    scheduler_task.cancel()
     print("👋 CEAP API shutting down")
 
 
 app = FastAPI(
     title="CEAP API",
     description="Campus Event & Assessment Platform — REST API",
-    version="0.2.0",
+    version="0.3.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     lifespan=lifespan,
 )
+
+# ── Error Handler (must be first middleware) ──
+app.add_middleware(ErrorHandlerMiddleware)
 
 # ── Rate Limiter Setup ────────────────────────
 app.state.limiter = limiter
@@ -69,7 +83,7 @@ app.include_router(api_router)
 async def root():
     return {
         "name": settings.APP_NAME,
-        "version": "0.2.0",
+        "version": "0.3.0",
         "status": "running",
         "env": settings.APP_ENV,
         "docs": "/api/docs",
@@ -79,3 +93,4 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+

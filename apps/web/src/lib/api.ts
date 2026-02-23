@@ -60,16 +60,17 @@ export default api;
 
 // ── Auth APIs ────────────────────────────────
 export const authAPI = {
-    register: (data: {
+    login: (data: { email: string; password: string; tenant_slug: string }) =>
+        api.post("/auth/login", data),
+
+    facultyJoin: (data: {
         email: string;
         password: string;
         full_name: string;
+        faculty_key: string;
         tenant_slug: string;
         department?: string;
-    }) => api.post("/auth/register", data),
-
-    login: (data: { email: string; password: string; tenant_slug: string }) =>
-        api.post("/auth/login", data),
+    }) => api.post("/auth/faculty-join", data),
 
     refresh: (refresh_token: string) =>
         api.post("/auth/refresh", { refresh_token }),
@@ -87,6 +88,45 @@ export const authAPI = {
 
     resetPassword: (data: { token: string; new_password: string }) =>
         api.post("/auth/reset-password", data),
+};
+
+export const mcqAPI = {
+    listQuestions: (eventId: string) =>
+        api.get(`/mcq/events/${eventId}/questions`),
+
+    createQuestion: (eventId: string, data: {
+        question_text: string;
+        option_a: string;
+        option_b: string;
+        option_c?: string;
+        option_d?: string;
+        correct_option: string;
+        explanation?: string;
+        marks?: number;
+        negative_marks?: number;
+        difficulty?: string;
+        topic?: string;
+    }) => api.post(`/mcq/events/${eventId}/questions`, data),
+
+    importQuestions: (eventId: string, file: File) => {
+        const formData = new FormData();
+        formData.append("file", file);
+        return api.post(`/mcq/events/${eventId}/questions/import`, formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
+    },
+
+    deleteQuestion: (questionId: string) =>
+        api.delete(`/mcq/questions/${questionId}`),
+
+    startExam: (eventId: string) =>
+        api.post(`/mcq/events/${eventId}/start`),
+
+    submitExam: (eventId: string, answers: Record<string, string>) =>
+        api.post(`/mcq/events/${eventId}/submit`, { answers }),
+
+    getResult: (eventId: string) =>
+        api.get(`/mcq/events/${eventId}/result`),
 };
 
 // ── Analytics APIs ───────────────────────────
