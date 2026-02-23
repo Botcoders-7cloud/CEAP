@@ -507,14 +507,6 @@ body {
   .grid-cols-4 {
     grid-template-columns: 1fr 1fr !important;
   }
-
-  .sm\\:grid-cols-3 {
-    grid-template-columns: 1fr !important;
-  }
-
-  .sm\\:grid-cols-4 {
-    grid-template-columns: 1fr 1fr !important;
-  }
 }
 
 /* Mobile menu button (visible only on small screens) */
