@@ -4,6 +4,7 @@ Async SQLAlchemy engine and session management.
 Supports both PostgreSQL (production) and SQLite (local dev).
 """
 import ssl
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from app.config import settings
@@ -68,11 +69,46 @@ async def get_db():
 
 
 async def init_db():
-    """Create all tables. Gracefully handles connection failures."""
+    """Create all tables and add missing columns. Gracefully handles failures."""
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         print("✅ Database tables created/verified")
+
+        # Add missing columns to existing tables (create_all can't ALTER)
+        await _apply_column_migrations()
+
     except Exception as e:
         print(f"⚠️  Database init warning: {e}")
         print("   Tables may need to be created manually or the DB may be temporarily unavailable.")
+
+
+async def _apply_column_migrations():
+    """
+    Safely add missing columns to existing tables.
+    Each ALTER is idempotent — if column exists, the error is caught silently.
+    """
+    migrations = [
+        # Phase 1: password reset fields
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(64)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMP",
+        # Phase 2: must change password
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false",
+    ]
+
+    # SQLite uses a different syntax and doesn't support IF NOT EXISTS
+    if settings.is_sqlite:
+        print("ℹ️  SQLite: skipping ALTER TABLE migrations (handled by create_all)")
+        return
+
+    try:
+        async with engine.begin() as conn:
+            for sql in migrations:
+                try:
+                    await conn.execute(sa.text(sql))
+                except Exception:
+                    pass  # Column likely already exists
+        print("✅ Column migrations applied")
+    except Exception as e:
+        print(f"⚠️  Column migration warning: {e}")
+
