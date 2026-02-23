@@ -1,7 +1,5 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  output: "standalone",
+const nextConfig = {
+  output: "standalone" as const,
   eslint: {
     ignoreDuringBuilds: true,
   },

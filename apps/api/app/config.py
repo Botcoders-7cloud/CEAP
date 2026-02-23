@@ -41,12 +41,19 @@ class Settings(BaseSettings):
     R2_BUCKET_NAME: str = "ceap-uploads"
     R2_PUBLIC_URL: str = ""
 
+    # Email (Resend)
+    RESEND_API_KEY: str = ""
+    FROM_EMAIL: str = "CEAP <noreply@ceap.app>"
+    FRONTEND_URL: str = "http://localhost:3000"
+
     @property
     def cors_origins_list(self) -> list[str]:
         origins = [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
         # Always allow localhost for dev
-        if "http://localhost:3000" not in origins:
-            origins.append("http://localhost:3000")
+        for port in ["3000", "3001"]:
+            url = f"http://localhost:{port}"
+            if url not in origins:
+                origins.append(url)
         return origins
 
     @property

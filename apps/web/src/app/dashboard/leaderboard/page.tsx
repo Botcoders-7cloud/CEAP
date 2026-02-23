@@ -227,15 +227,16 @@ export default function LeaderboardPage() {
                             return (
                                 <div
                                     key={entry.id || index}
-                                    className={`grid grid-cols-12 gap-4 px-5 py-3.5 items-center transition-all duration-200 hover:bg-white/[0.02] ${isCurrentUser ? "ring-1 ring-inset" : ""
-                                        }`}
+                                    className={`grid grid-cols-12 gap-4 px-5 py-3.5 items-center transition-all duration-200 hover:bg-white/[0.02]`}
                                     style={{
                                         background: isCurrentUser
                                             ? "rgba(99,102,241,0.08)"
                                             : getRankBg(rank),
-                                        ringColor: isCurrentUser
-                                            ? "var(--primary)"
-                                            : "transparent",
+                                        outline: isCurrentUser
+                                            ? "1px solid rgba(99,102,241,0.3)"
+                                            : "none",
+                                        outlineOffset: "-1px",
+                                        borderRadius: 8,
                                     }}
                                 >
                                     {/* Rank */}

@@ -21,3 +21,9 @@ services:
         value: https://ce.judge0.com
       - key: PYTHON_VERSION
         value: "3.11.7"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: FROM_EMAIL
+        value: "CEAP <onboarding@resend.dev>"
+      - key: FRONTEND_URL
+        sync: false

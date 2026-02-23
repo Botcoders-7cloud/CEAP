@@ -81,6 +81,17 @@ export const authAPI = {
 
     changePassword: (data: { old_password: string; new_password: string }) =>
         api.post("/auth/change-password", data),
+
+    forgotPassword: (data: { email: string; tenant_slug: string }) =>
+        api.post("/auth/forgot-password", data),
+
+    resetPassword: (data: { token: string; new_password: string }) =>
+        api.post("/auth/reset-password", data),
+};
+
+// ── Analytics APIs ───────────────────────────
+export const analyticsAPI = {
+    dashboard: () => api.get("/analytics/dashboard"),
 };
 
 // ── Event APIs ───────────────────────────────

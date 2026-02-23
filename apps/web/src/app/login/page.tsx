@@ -116,6 +116,15 @@ export default function LoginPage() {
                             </div>
                         </div>
 
+                        <div style={{ textAlign: "right", marginBottom: 4 }}>
+                            <a href="/forgot-password" style={{ fontSize: 12, color: "var(--text-secondary)", textDecoration: "none" }}
+                                onMouseOver={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                                onMouseOut={(e) => (e.currentTarget.style.textDecoration = "none")}
+                            >
+                                Forgot password?
+                            </a>
+                        </div>
+
                         <button
                             type="submit"
                             disabled={loading}

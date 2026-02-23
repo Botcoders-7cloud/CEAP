@@ -30,6 +30,7 @@ interface AuthState {
         email: string;
         password: string;
         full_name: string;
+        tenant_slug?: string;
         department?: string;
         role?: string;
         roll_number?: string;

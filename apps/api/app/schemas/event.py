@@ -1,40 +1,40 @@
 """
 CEAP Pydantic Schemas — Events
 """
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, Field
+from typing import Optional, List, Literal
 from uuid import UUID
 from datetime import datetime
 
 
 class EventCreate(BaseModel):
-    title: str
-    slug: str
-    description: Optional[str] = None
-    event_type: str  # hackathon/coding_contest/mcq_exam/project
+    title: str = Field(..., min_length=3, max_length=200)
+    slug: str = Field(..., min_length=3, max_length=100, pattern=r"^[a-z0-9\-]+$")
+    description: Optional[str] = Field(None, max_length=5000)
+    event_type: Literal["hackathon", "coding_contest", "mcq_exam", "project"] = "coding_contest"
     banner_url: Optional[str] = None
     registration_start: Optional[datetime] = None
     registration_end: Optional[datetime] = None
     event_start: Optional[datetime] = None
     event_end: Optional[datetime] = None
-    max_participants: Optional[int] = None
-    team_min_size: int = 1
-    team_max_size: int = 1
+    max_participants: Optional[int] = Field(None, ge=1, le=10000)
+    team_min_size: int = Field(1, ge=1, le=20)
+    team_max_size: int = Field(1, ge=1, le=20)
     is_team_event: bool = False
     eligibility_rules: Optional[dict] = {}
     scoring_formula: Optional[dict] = {"auto": 0.7, "judge": 0.3}
 
 
 class EventUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    status: Optional[str] = None
+    title: Optional[str] = Field(None, min_length=3, max_length=200)
+    description: Optional[str] = Field(None, max_length=5000)
+    status: Optional[Literal["draft", "published", "ongoing", "completed", "archived"]] = None
     banner_url: Optional[str] = None
     registration_start: Optional[datetime] = None
     registration_end: Optional[datetime] = None
     event_start: Optional[datetime] = None
     event_end: Optional[datetime] = None
-    max_participants: Optional[int] = None
+    max_participants: Optional[int] = Field(None, ge=1, le=10000)
     scoring_formula: Optional[dict] = None
 
 

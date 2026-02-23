@@ -55,6 +55,8 @@ class User(Base):
     status = Column(String(20), default="active")          # active | pending | suspended
     roll_number = Column(String(30), nullable=True)        # students only
     last_login = Column(DateTime, nullable=True)
+    password_reset_token = Column(String(64), nullable=True)
+    password_reset_expires = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
