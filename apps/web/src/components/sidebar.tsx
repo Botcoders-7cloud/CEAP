@@ -9,6 +9,7 @@ import { useAuthStore } from "@/store/auth";
 import {
     LayoutDashboard, Calendar, Code2, Trophy, Award, Settings,
     Users, BookOpen, LogOut, ChevronLeft, Menu, BarChart3,
+    UserCircle, FileText,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -19,6 +20,7 @@ const STUDENT_NAV = [
     { label: "Exams", href: "/dashboard/events?type=mcq_exam", icon: BookOpen },
     { label: "Leaderboard", href: "/dashboard/leaderboard", icon: Trophy },
     { label: "Certificates", href: "/dashboard/certificates", icon: Award },
+    { label: "My Profile", href: "/dashboard/profile", icon: UserCircle },
     { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
@@ -28,6 +30,7 @@ const ADMIN_NAV = [
     { label: "Problems", href: "/dashboard/problems", icon: BookOpen },
     { label: "Users", href: "/dashboard/users", icon: Users },
     { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+    { label: "Audit Logs", href: "/dashboard/audit-logs", icon: FileText },
     { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 

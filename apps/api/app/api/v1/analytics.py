@@ -4,13 +4,13 @@ Real-time platform analytics, student stats, and export endpoints.
 """
 import io
 from datetime import datetime
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 
 from app.database import get_db
-from app.models.tenant import User
+from app.models.tenant import User, AuditLog
 from app.models.event import Event, Registration
 from app.models.problem import Submission
 from app.models.leaderboard import Certificate, LeaderboardEntry
@@ -306,3 +306,55 @@ async def export_mcq_results(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+# ── Audit Logs (admin only) ──────────────────────────────────
+@router.get("/audit-logs")
+async def list_audit_logs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    action: str = Query(None),
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """List audit logs for the tenant. Admin only."""
+    q = select(AuditLog).where(AuditLog.tenant_id == user.tenant_id)
+    if action:
+        q = q.where(AuditLog.action == action)
+    q = q.order_by(desc(AuditLog.created_at))
+
+    # Count
+    count_q = select(func.count()).where(AuditLog.tenant_id == user.tenant_id)
+    if action:
+        count_q = count_q.where(AuditLog.action == action)
+    total = (await db.execute(count_q)).scalar() or 0
+
+    # Paginate
+    q = q.offset((page - 1) * page_size).limit(page_size)
+    rows = (await db.execute(q)).scalars().all()
+
+    # Resolve user names
+    user_ids = list({str(r.user_id) for r in rows if r.user_id})
+    user_map = {}
+    if user_ids:
+        users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
+        for u in users_result.scalars().all():
+            user_map[str(u.id)] = u.full_name or u.email
+
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "logs": [{
+            "id": str(r.id),
+            "action": r.action,
+            "entity_type": r.entity_type,
+            "entity_id": str(r.entity_id) if r.entity_id else None,
+            "user_id": str(r.user_id) if r.user_id else None,
+            "user_name": user_map.get(str(r.user_id), "System") if r.user_id else "System",
+            "old_values": r.old_values,
+            "new_values": r.new_values,
+            "ip_address": r.ip_address,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        } for r in rows],
+    }

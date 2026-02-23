@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { eventAPI, submissionAPI, problemAPI, certificateAPI } from "@/lib/api";
+import { eventAPI, submissionAPI, problemAPI, certificateAPI, analyticsAPI } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import Link from "next/link";
 import {
@@ -26,6 +26,7 @@ import {
     Play,
     X,
     Award,
+    Download,
 } from "lucide-react";
 
 export default function EventDetailPage() {
@@ -208,12 +209,32 @@ export default function EventDetailPage() {
                             </Link>
                         )}
                         {isAdmin && ["ongoing", "completed"].includes(event.status) && (
-                            <button onClick={() => generateCertsMutation.mutate()} disabled={generateCertsMutation.isPending}
-                                className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl font-semibold transition-all"
-                                style={{ background: "rgba(16,185,129,0.12)", color: "#10b981" }}>
-                                {generateCertsMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Award size={14} />}
-                                🎓 Generate Certificates
-                            </button>
+                            <div className="flex gap-2">
+                                <button onClick={() => generateCertsMutation.mutate()} disabled={generateCertsMutation.isPending}
+                                    className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl font-semibold transition-all"
+                                    style={{ background: "rgba(16,185,129,0.12)", color: "#10b981" }}>
+                                    {generateCertsMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Award size={14} />}
+                                    🎓 Certificates
+                                </button>
+                                <button onClick={async () => {
+                                    const r = await analyticsAPI.exportLeaderboard(event.id);
+                                    const url = URL.createObjectURL(r.data);
+                                    const a = document.createElement("a"); a.href = url; a.download = `leaderboard_${event.slug}.csv`; a.click();
+                                }}
+                                    className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl font-semibold transition-all"
+                                    style={{ background: "rgba(59,130,246,0.12)", color: "#3b82f6" }}>
+                                    <Download size={12} /> Leaderboard
+                                </button>
+                                <button onClick={async () => {
+                                    const r = await analyticsAPI.exportParticipants(event.id);
+                                    const url = URL.createObjectURL(r.data);
+                                    const a = document.createElement("a"); a.href = url; a.download = `participants_${event.slug}.csv`; a.click();
+                                }}
+                                    className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl font-semibold transition-all"
+                                    style={{ background: "rgba(124,58,237,0.12)", color: "#7c3aed" }}>
+                                    <Download size={12} /> Participants
+                                </button>
+                            </div>
                         )}
                     </div>
                 </div>

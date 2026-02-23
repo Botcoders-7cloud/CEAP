@@ -139,6 +139,8 @@ export const analyticsAPI = {
         api.get(`/analytics/export/participants/${eventId}`, { responseType: "blob" }),
     exportMCQResults: (eventId: string) =>
         api.get(`/analytics/export/mcq-results/${eventId}`, { responseType: "blob" }),
+    auditLogs: (params?: { page?: number; page_size?: number; action?: string }) =>
+        api.get("/analytics/audit-logs", { params }),
 };
 
 // ── Event APIs ───────────────────────────────
